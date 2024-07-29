@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.12)
 project(embedded-media VERSION 1.0.0 LANGUAGES C CXX)
 
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+zephyr_include_directories(.)
+
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 11)

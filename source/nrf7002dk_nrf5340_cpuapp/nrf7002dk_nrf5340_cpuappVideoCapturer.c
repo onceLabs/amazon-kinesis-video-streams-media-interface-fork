@@ -20,29 +20,70 @@
 #include "nrf7002dk_nrf5340_cpuappCommon.h"
 #include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
 
-#include "nrf7002dk_nrf5340_cpuappPort.h"
-#include "nrf7002dk_nrf5340_cpuappCapturer.h"
+// Temp fixes to enable compilation
+#define Zephyr_HANDLE_NULL_CHECK(x)                                                                                                                    \
+    if (!(x)) {                                                                                                                                      \
+        return -EINVAL;                                                                                                                              \
+    }
+#define Zephyr_HANDLE_STATUS_CHECK(zephyrHandle, expectedStatus)                                                                                         \
+    if ((zephyrHandle)->status != (expectedStatus)) {                                                                                                  \
+        return -EAGAIN;                                                                                                                              \
+    }
 
-#define V4L2_TARGET_BITRATE             (5 * 1024 * 1024LL)
-#define V4L2_SYNC_GET_FRAME_TIMEOUT_SEC (1)
+typedef VideoCapturerHandle ZephyrCapturerHandle;
+
+typedef enum {
+    Zephyr_CAP_FMT_H264 = 0,
+} ZephyrCapturerFormat;
+
+void* zephyrCapturerOpen(const char* deviceName)
+{
+    return NULL;
+}
+int zephyrCapturerConfig(ZephyrCapturerHandle handle, uint32_t width, uint32_t height, ZephyrCapturerFormat format, uint32_t targetBitrate)
+{
+    return 0;
+}
+int zephyrCapturerStartStreaming(ZephyrCapturerHandle handle)
+{
+    return 0;
+}
+int zephyrCapturerSyncGetFrame(ZephyrCapturerHandle handle, uint32_t timeoutSec, void* pFrameDataBuffer, size_t frameDataBufferSize, size_t* pFrameSize)
+{
+    return 0;
+}
+int zephyrCapturerStopStreaming(ZephyrCapturerHandle handle)
+{
+    return 0;
+}
+void zephyrCapturerClose(ZephyrCapturerHandle handle)
+{
+}
+
+
+#include "nrf7002dk_nrf5340_cpuappPort.h"
+// #include "nrf7002dk_nrf5340_cpuappCapturer.h" TODO fix this
+
+#define Zephyr_TARGET_BITRATE             (5 * 1024 * 1024LL)
+#define Zephyr_SYNC_GET_FRAME_TIMEOUT_SEC (1)
 
 typedef struct {
     VideoCapturerStatus status;
     VideoCapability capability;
     VideoFormat format;
     VideoResolution resolution;
-    V4l2CapturerHandle privHandle;
-} V4L2VideoCapturer;
+    ZephyrCapturerHandle privHandle;
+} ZephyrVideoCapturer;
 
-#define V4L2_HANDLE_GET(x) V4L2VideoCapturer* v4l2Handle = (V4L2VideoCapturer*) ((x))
+#define Zephyr_HANDLE_GET(x) ZephyrVideoCapturer* zephyrHandle = (ZephyrVideoCapturer*) ((x))
 
 static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newStatus)
 {
-    V4L2_HANDLE_NULL_CHECK(handle);
-    V4L2_HANDLE_GET(handle);
+    Zephyr_HANDLE_NULL_CHECK(handle);
+    Zephyr_HANDLE_GET(handle);
 
-    if (newStatus != v4l2Handle->status) {
-        v4l2Handle->status = newStatus;
+    if (newStatus != zephyrHandle->status) {
+        zephyrHandle->status = newStatus;
         LOG("VideoCapturer new status[%d]", newStatus);
     }
 
@@ -51,31 +92,31 @@ static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newSt
 
 VideoCapturerHandle videoCapturerCreate(void)
 {
-    V4L2VideoCapturer* v4l2Handle = NULL;
+    ZephyrVideoCapturer* zephyrHandle = NULL;
 
-    if (!(v4l2Handle = (V4L2VideoCapturer*) malloc(sizeof(V4L2VideoCapturer)))) {
+    if (!(zephyrHandle = (ZephyrVideoCapturer*) malloc(sizeof(ZephyrVideoCapturer)))) {
         LOG("OOM");
         return NULL;
     }
 
-    memset(v4l2Handle, 0, sizeof(V4L2VideoCapturer));
+    memset(zephyrHandle, 0, sizeof(ZephyrVideoCapturer));
 
-    v4l2Handle->privHandle = v4l2CapturerOpen("/dev/video0");
+    zephyrHandle->privHandle = zephyrCapturerOpen("/dev/video0");
 
-    if (!v4l2Handle->privHandle) {
+    if (!zephyrHandle->privHandle) {
         LOG("Failed to open /dev/video0");
-        videoCapturerDestroy((VideoCapturerHandle) v4l2Handle);
+        videoCapturerDestroy((VideoCapturerHandle) zephyrHandle);
         return NULL;
     }
 
     // Now implementation supports H.264, 1080p, 720p, 480p, 360p and 320p
-    v4l2Handle->capability.formats = (1 << (VID_FMT_H264 - 1));
-    v4l2Handle->capability.resolutions =
+    zephyrHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
+    zephyrHandle->capability.resolutions =
         (1 << (VID_RES_1080P - 1)) | (1 << (VID_RES_720P - 1)) | (1 << (VID_RES_480P - 1)) | (1 << (VID_RES_360P - 1)) | (1 << (VID_RES_320P - 1));
 
-    setStatus((VideoCapturerHandle) v4l2Handle, VID_CAP_STATUS_STREAM_OFF);
+    setStatus((VideoCapturerHandle) zephyrHandle, VID_CAP_STATUS_STREAM_OFF);
 
-    return (VideoCapturerHandle) v4l2Handle;
+    return (VideoCapturerHandle) zephyrHandle;
 }
 
 VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
@@ -84,30 +125,30 @@ VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
         return VID_CAP_STATUS_NOT_READY;
     }
 
-    V4L2_HANDLE_GET(handle);
-    return v4l2Handle->status;
+    Zephyr_HANDLE_GET(handle);
+    return zephyrHandle->status;
 }
 
 int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability* pCapability)
 {
-    V4L2_HANDLE_NULL_CHECK(handle);
-    V4L2_HANDLE_GET(handle);
+    Zephyr_HANDLE_NULL_CHECK(handle);
+    Zephyr_HANDLE_GET(handle);
 
     if (!pCapability) {
         return -EINVAL;
     }
 
-    *pCapability = v4l2Handle->capability;
+    *pCapability = zephyrHandle->capability;
 
     return 0;
 }
 
 int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format, const VideoResolution resolution)
 {
-    V4L2_HANDLE_NULL_CHECK(handle);
-    V4L2_HANDLE_GET(handle);
+    Zephyr_HANDLE_NULL_CHECK(handle);
+    Zephyr_HANDLE_GET(handle);
 
-    V4L2_HANDLE_STATUS_CHECK(v4l2Handle, VID_CAP_STATUS_STREAM_OFF);
+    Zephyr_HANDLE_STATUS_CHECK(zephyrHandle, VID_CAP_STATUS_STREAM_OFF);
 
     uint32_t width, height = 0;
     switch (resolution) {
@@ -137,10 +178,10 @@ int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format,
             return -EINVAL;
     }
 
-    V4l2CapturerFormat privFormat = V4L2_CAP_FMT_H264;
+    ZephyrCapturerFormat privFormat = Zephyr_CAP_FMT_H264;
     switch (format) {
         case VID_FMT_H264:
-            privFormat = V4L2_CAP_FMT_H264;
+            privFormat = Zephyr_CAP_FMT_H264;
             break;
 
         default:
@@ -149,34 +190,34 @@ int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format,
             break;
     }
 
-    if (v4l2CapturerConfig(v4l2Handle->privHandle, width, height, privFormat, V4L2_TARGET_BITRATE)) {
-        LOG("Failed to config V4L2 Capturer");
+    if (zephyrCapturerConfig(zephyrHandle->privHandle, width, height, privFormat, Zephyr_TARGET_BITRATE)) {
+        LOG("Failed to config Zephyr Capturer");
         return -EAGAIN;
     }
 
-    v4l2Handle->format = format;
-    v4l2Handle->resolution = resolution;
+    zephyrHandle->format = format;
+    zephyrHandle->resolution = resolution;
 
     return 0;
 }
 
 int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pFormat, VideoResolution* pResolution)
 {
-    V4L2_HANDLE_NULL_CHECK(handle);
-    V4L2_HANDLE_GET(handle);
+    Zephyr_HANDLE_NULL_CHECK(handle);
+    Zephyr_HANDLE_GET(handle);
 
-    *pFormat = v4l2Handle->format;
-    *pResolution = v4l2Handle->resolution;
+    *pFormat = zephyrHandle->format;
+    *pResolution = zephyrHandle->resolution;
 
     return 0;
 }
 
 int videoCapturerAcquireStream(VideoCapturerHandle handle)
 {
-    V4L2_HANDLE_NULL_CHECK(handle);
-    V4L2_HANDLE_GET(handle);
+    Zephyr_HANDLE_NULL_CHECK(handle);
+    Zephyr_HANDLE_GET(handle);
 
-    if (v4l2CapturerStartStreaming(v4l2Handle->privHandle)) {
+    if (zephyrCapturerStartStreaming(zephyrHandle->privHandle)) {
         LOG("Failed to acquire stream");
         return -EAGAIN;
     }
@@ -187,12 +228,12 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
 int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, const size_t frameDataBufferSize, uint64_t* pTimestamp,
                           size_t* pFrameSize)
 {
-    V4L2_HANDLE_NULL_CHECK(handle);
-    V4L2_HANDLE_GET(handle);
+    Zephyr_HANDLE_NULL_CHECK(handle);
+    Zephyr_HANDLE_GET(handle);
 
-    V4L2_HANDLE_STATUS_CHECK(v4l2Handle, VID_CAP_STATUS_STREAM_ON);
+    Zephyr_HANDLE_STATUS_CHECK(zephyrHandle, VID_CAP_STATUS_STREAM_ON);
 
-    int ret = v4l2CapturerSyncGetFrame(v4l2Handle->privHandle, V4L2_SYNC_GET_FRAME_TIMEOUT_SEC, pFrameDataBuffer, frameDataBufferSize, pFrameSize);
+    int ret = zephyrCapturerSyncGetFrame(zephyrHandle->privHandle, Zephyr_SYNC_GET_FRAME_TIMEOUT_SEC, pFrameDataBuffer, frameDataBufferSize, pFrameSize);
     if (!ret) {
         *pTimestamp = getEpochTimestampInUs();
     }
@@ -202,10 +243,10 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
 
 int videoCapturerReleaseStream(VideoCapturerHandle handle)
 {
-    V4L2_HANDLE_NULL_CHECK(handle);
-    V4L2_HANDLE_GET(handle);
+    Zephyr_HANDLE_NULL_CHECK(handle);
+    Zephyr_HANDLE_GET(handle);
 
-    if (v4l2CapturerStopStreaming(v4l2Handle->privHandle)) {
+    if (zephyrCapturerStopStreaming(zephyrHandle->privHandle)) {
         LOG("Failed to release stream");
         return -EAGAIN;
     }
@@ -218,15 +259,15 @@ void videoCapturerDestroy(VideoCapturerHandle handle)
     if (!handle) {
         return;
     }
-    V4L2_HANDLE_GET(handle);
+    Zephyr_HANDLE_GET(handle);
 
-    if (v4l2Handle->status == VID_CAP_STATUS_STREAM_ON) {
-        videoCapturerReleaseStream(v4l2Handle);
+    if (zephyrHandle->status == VID_CAP_STATUS_STREAM_ON) {
+        videoCapturerReleaseStream(zephyrHandle);
     }
 
     setStatus(handle, VID_CAP_STATUS_NOT_READY);
 
-    v4l2CapturerClose(v4l2Handle->privHandle);
+    zephyrCapturerClose(zephyrHandle->privHandle);
 
     free(handle);
 }
