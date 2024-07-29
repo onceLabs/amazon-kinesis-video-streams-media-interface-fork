@@ -33,6 +33,8 @@ elseif(BOARD STREQUAL "C302")
     message(STATUS "Selected board C302")
 elseif(BOARD STREQUAL "SV82x")
     message(STATUS "Selected board SV82x")
+elseif(BOARD STREQUAL "NRF5340" OR BOARD STREQUAL "nrf7002dk_nrf5340_cpuapp")
+    message(STATUS "Selected board NRF5340")
 else()
     message(FATAL_ERROR "${BOARD} is not implemented yet.")
 endif()
@@ -40,7 +42,7 @@ endif()
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/${BOARD}.cmake)
 # Board Specific Parts End
 
-option(BUILD_WEBRTC_SAMPLES "Build webrtc samples" ON)
+option(BUILD_WEBRTC_SAMPLES "Build webrtc samples" OFF)
 option(BUILD_KVS_SAMPLES "Build KVS Producer samples" OFF)
 option(BUILD_SAVE_FRAME_SAMPLES "Build save frame samples" OFF)
 
@@ -75,18 +77,18 @@ target_link_libraries(embedded-media-static PRIVATE ${BOARD_LIBS_STATIC})
 set_target_properties(embedded-media-static PROPERTIES PUBLIC_HEADER "${INCS}")
 set_target_properties(embedded-media-static PROPERTIES OUTPUT_NAME embedded-media)
 
-add_library(embedded-media-shared SHARED ${SRCS} ${BOARD_SRCS})
+# add_library(embedded-media-shared SHARED ${SRCS} ${BOARD_SRCS})
 
-if(BOARD_BUILD_DEPENDS AND NOT(BOARD_BUILD_DEPENDS STREQUAL ""))
-    add_dependencies(embedded-media-shared ${BOARD_BUILD_DEPENDS})
-endif()
+# if(BOARD_BUILD_DEPENDS AND NOT(BOARD_BUILD_DEPENDS STREQUAL ""))
+#     add_dependencies(embedded-media-shared ${BOARD_BUILD_DEPENDS})
+# endif()
 
-target_include_directories(embedded-media-shared PRIVATE ${BOARD_INCS_DIR})
-target_include_directories(embedded-media-shared PUBLIC ${INCS_DIR})
-target_link_directories(embedded-media-shared PUBLIC ${BOARD_LIBS_DIR})
-target_link_libraries(embedded-media-shared PRIVATE ${BOARD_LIBS_SHARED})
-set_target_properties(embedded-media-shared PROPERTIES PUBLIC_HEADER "${INCS}")
-set_target_properties(embedded-media-shared PROPERTIES OUTPUT_NAME embedded-media)
+# target_include_directories(embedded-media-shared PRIVATE ${BOARD_INCS_DIR})
+# target_include_directories(embedded-media-shared PUBLIC ${INCS_DIR})
+# target_link_directories(embedded-media-shared PUBLIC ${BOARD_LIBS_DIR})
+# target_link_libraries(embedded-media-shared PRIVATE ${BOARD_LIBS_SHARED})
+# set_target_properties(embedded-media-shared PROPERTIES PUBLIC_HEADER "${INCS}")
+# set_target_properties(embedded-media-shared PROPERTIES OUTPUT_NAME embedded-media)
 
 if(BOARD STREQUAL "QCS610" OR BOARD STREQUAL "GSTREAMER")
     find_package(PkgConfig REQUIRED)
@@ -104,7 +106,7 @@ if(NOT FRAME_FILE_PATH_PREFIX OR FRAME_FILE_PATH_PREFIX STREQUAL "")
 endif()
 
 target_compile_definitions(embedded-media-static PRIVATE "FRAME_FILE_PATH_PREFIX=\"${FRAME_FILE_PATH_PREFIX}\"")
-target_compile_definitions(embedded-media-shared PRIVATE "FRAME_FILE_PATH_PREFIX=\"${FRAME_FILE_PATH_PREFIX}\"")
+# target_compile_definitions(embedded-media-shared PRIVATE "FRAME_FILE_PATH_PREFIX=\"${FRAME_FILE_PATH_PREFIX}\"")
 
 include(GNUInstallDirs)
 
@@ -112,9 +114,9 @@ install(TARGETS embedded-media-static
     LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 
-install(TARGETS embedded-media-shared
-    LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+# install(TARGETS embedded-media-shared
+#     LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+#     ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 
 install(DIRECTORY ${INCS_DIR}
     DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR})
