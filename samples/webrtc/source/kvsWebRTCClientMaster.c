@@ -19,7 +19,7 @@
 #include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
 #include "com/amazonaws/kinesis/video/player/AudioPlayer.h"
 
-#define VIDEO_FRAME_BUFFER_SIZE_BYTES      (256 * 1024UL)
+#define VIDEO_FRAME_BUFFER_SIZE_BYTES      (160 * 1024UL)
 #define AUDIO_FRAME_BUFFER_SIZE_BYTES      (1024UL)
 #define HUNDREDS_OF_NANOS_IN_A_MICROSECOND 10LL
 
@@ -30,7 +30,7 @@ static VideoCapturerHandle videoCapturerHandle = NULL;
 
 static void sessionOnShutdown(UINT64 customData, PSampleStreamingSession pSampleStreamingSession)
 {
-    DLOGD("Shut down session %s\n", pSampleStreamingSession->peerId);
+    printf("Shut down session %s\n", pSampleStreamingSession->peerId);
     audioPlayerReleaseStream(audioPlayerHandle);
 }
 
@@ -43,12 +43,12 @@ static void remoteAudioFrameHandler(UINT64 customData, PFrame pFrame)
     if (pSampleStreamingSession->firstFrame) {
         pSampleStreamingSession->firstFrame = FALSE;
         pSampleStreamingSession->startUpLatency = (GETTIME() - pSampleStreamingSession->offerReceiveTime) / HUNDREDS_OF_NANOS_IN_A_MILLISECOND;
-        DLOGI("Start up latency from offer to first frame: %" PRIu64 "ms\n", pSampleStreamingSession->startUpLatency);
+        printf("Start up latency from offer to first frame: %" PRIu64 "ms\n", pSampleStreamingSession->startUpLatency);
 
         streamingSessionOnShutdown(pSampleStreamingSession, NULL, sessionOnShutdown);
 
         if (audioPlayerAcquireStream(audioPlayerHandle)) {
-            DLOGE("audioPlayerAcquireStream failed");
+            printf("audioPlayerAcquireStream failed");
         }
     }
 
@@ -70,7 +70,7 @@ static void writeFrameToAllSessions(const UINT64 timestamp, PVOID pData, const S
     } else if (!STRNCMP(trackId, SAMPLE_AUDIO_TRACK_ID, STRLEN(SAMPLE_AUDIO_TRACK_ID))) {
         isVideo = FALSE;
     } else {
-        DLOGE("unknown trackId: %s", trackId);
+        printf("unknown trackId: %s", trackId);
         return;
     }
 
@@ -83,10 +83,9 @@ static void writeFrameToAllSessions(const UINT64 timestamp, PVOID pData, const S
         }
         if (status != STATUS_SRTP_NOT_READY_YET) {
             if (status != STATUS_SUCCESS) {
-                DLOGV("writeFrame() failed with 0x%08x", status);
-            } else if (gSampleConfiguration->sampleStreamingSessionList[i]->firstFrame && status == STATUS_SUCCESS) {
-                PROFILE_WITH_START_TIME(gSampleConfiguration->sampleStreamingSessionList[i]->offerReceiveTime, "Time to first frame");
-                gSampleConfiguration->sampleStreamingSessionList[i]->firstFrame = FALSE;
+#ifdef VERBOSE
+                printf("writeFrame() failed with 0x%08x\n", status);
+#endif
             }
         }
     }
@@ -98,12 +97,11 @@ INT32 main(INT32 argc, CHAR* argv[])
     STATUS retStatus = STATUS_SUCCESS;
     UINT32 frameSize;
     PSampleConfiguration pSampleConfiguration = NULL;
-    PCHAR pChannelName;
     SignalingClientMetrics signalingClientMetrics;
+    PCHAR pChannelName;
     signalingClientMetrics.version = SIGNALING_CLIENT_METRICS_CURRENT_VERSION;
 
     SET_INSTRUMENTED_ALLOCATORS();
-    UINT32 logLevel = setLogLevel();
 
 #ifndef _WIN32
     signal(SIGINT, sigintHandler);
@@ -119,7 +117,7 @@ INT32 main(INT32 argc, CHAR* argv[])
               audioCapability.channels, audioCapability.sampleRates, audioCapability.bitDepths);
         if (audioCapturerSetFormat(audioCapturerHandle, AUD_FMT_G711A, AUD_CHN_MONO, AUD_SAM_8K, AUD_BIT_16)) {
             DLOGE("Unable to set AudioCapturer format");
-            audioCapturerDestroy(audioCapturerHandle);
+            audioCapturerDestory(audioCapturerHandle);
             audioCapturerHandle = NULL;
         }
     }
@@ -135,7 +133,7 @@ INT32 main(INT32 argc, CHAR* argv[])
 
         if (audioPlayerSetFormat(audioPlayerHandle, AUD_FMT_G711A, AUD_CHN_MONO, AUD_SAM_8K, AUD_BIT_16)) {
             DLOGE("Unable to set AudioPlayer format");
-            audioPlayerDestroy(audioPlayerHandle);
+            audioPlayerDestory(audioPlayerHandle);
             audioPlayerHandle = NULL;
         }
     }
@@ -161,7 +159,22 @@ INT32 main(INT32 argc, CHAR* argv[])
     pChannelName = argc > 1 ? argv[1] : SAMPLE_CHANNEL_NAME;
 #endif
 
-    CHK_STATUS(createSampleConfiguration(pChannelName, SIGNALING_CHANNEL_ROLE_TYPE_MASTER, TRUE, TRUE, logLevel, &pSampleConfiguration));
+    retStatus = createSampleConfiguration(pChannelName, SIGNALING_CHANNEL_ROLE_TYPE_MASTER, TRUE, TRUE, &pSampleConfiguration);
+    if (retStatus != STATUS_SUCCESS) {
+        printf("[KVS Master] createSampleConfiguration(): operation returned status code: 0x%08x \n", retStatus);
+        goto CleanUp;
+    }
+
+    printf("[KVS Master] Created signaling channel %s\n", pChannelName);
+
+    if (pSampleConfiguration->enableFileLogging) {
+        retStatus =
+            createFileLogger(FILE_LOGGING_BUFFER_SIZE, MAX_NUMBER_OF_LOG_FILES, (PCHAR) FILE_LOGGER_LOG_FILE_DIRECTORY_PATH, TRUE, TRUE, NULL);
+        if (retStatus != STATUS_SUCCESS) {
+            printf("[KVS Master] createFileLogger(): operation returned status code: 0x%08x \n", retStatus);
+            pSampleConfiguration->enableFileLogging = FALSE;
+        }
+    }
 
     // Set the audio and video handlers
     if (videoCapturerHandle) {
@@ -177,66 +190,119 @@ INT32 main(INT32 argc, CHAR* argv[])
         pSampleConfiguration->receiveAudioVideoSource = sampleReceiveAudioVideoFrame;
     }
     pSampleConfiguration->onDataChannel = onDataChannel;
-    DLOGI("[KVS Master] Finished setting handlers");
+    printf("[KVS Master] Finished setting audio and video handlers\n");
 
     // Initialize KVS WebRTC. This must be done before anything else, and must only be done once.
-    CHK_STATUS(initKvsWebRtc());
-    DLOGI("[KVS Master] KVS WebRTC initialization completed successfully");
+    retStatus = initKvsWebRtc();
+    if (retStatus != STATUS_SUCCESS) {
+        printf("[KVS Master] initKvsWebRtc(): operation returned status code: 0x%08x \n", retStatus);
+        goto CleanUp;
+    }
+    printf("[KVS Master] KVS WebRTC initialization completed successfully\n");
 
-    CHK_STATUS(initSignaling(pSampleConfiguration, SAMPLE_MASTER_CLIENT_ID));
-    DLOGI("[KVS Master] Channel %s set up done ", pChannelName);
+    pSampleConfiguration->signalingClientCallbacks.messageReceivedFn = signalingMessageReceived;
+
+    strcpy(pSampleConfiguration->clientInfo.clientId, SAMPLE_MASTER_CLIENT_ID);
+
+    retStatus = createSignalingClientSync(&pSampleConfiguration->clientInfo, &pSampleConfiguration->channelInfo,
+                                          &pSampleConfiguration->signalingClientCallbacks, pSampleConfiguration->pCredentialProvider,
+                                          &pSampleConfiguration->signalingClientHandle);
+    if (retStatus != STATUS_SUCCESS) {
+        printf("[KVS Master] createSignalingClientSync(): operation returned status code: 0x%08x \n", retStatus);
+        goto CleanUp;
+    }
+    printf("[KVS Master] Signaling client created successfully\n");
+
+    // Enable the processing of the messages
+    retStatus = signalingClientFetchSync(pSampleConfiguration->signalingClientHandle);
+    if (retStatus != STATUS_SUCCESS) {
+        printf("[KVS Master] signalingClientFetchSync(): operation returned status code: 0x%08x \n", retStatus);
+        goto CleanUp;
+    }
+
+    retStatus = signalingClientConnectSync(pSampleConfiguration->signalingClientHandle);
+    if (retStatus != STATUS_SUCCESS) {
+        printf("[KVS Master] signalingClientConnectSync(): operation returned status code: 0x%08x \n", retStatus);
+        goto CleanUp;
+    }
+    printf("[KVS Master] Signaling client connection to socket established\n");
+
+    gSampleConfiguration = pSampleConfiguration;
+
+    printf("[KVS Master] Channel %s set up done \n", pChannelName);
 
     // Checking for termination
-    CHK_STATUS(sessionCleanupWait(pSampleConfiguration));
-    DLOGI("[KVS Master] Streaming session terminated");
+    retStatus = sessionCleanupWait(pSampleConfiguration);
+    if (retStatus != STATUS_SUCCESS) {
+        printf("[KVS Master] sessionCleanupWait(): operation returned status code: 0x%08x \n", retStatus);
+        goto CleanUp;
+    }
+
+    printf("[KVS Master] Streaming session terminated\n");
 
 CleanUp:
 
     if (retStatus != STATUS_SUCCESS) {
-        DLOGE("[KVS Master] Terminated with status code 0x%08x", retStatus);
+        printf("[KVS Master] Terminated with status code 0x%08x\n", retStatus);
     }
 
-    DLOGI("[KVS Master] Cleaning up....");
+    printf("[KVS Master] Cleaning up....\n");
     if (pSampleConfiguration != NULL) {
         // Kick of the termination sequence
         ATOMIC_STORE_BOOL(&pSampleConfiguration->appTerminateFlag, TRUE);
+
+        if (IS_VALID_MUTEX_VALUE(pSampleConfiguration->sampleConfigurationObjLock)) {
+            MUTEX_LOCK(pSampleConfiguration->sampleConfigurationObjLock);
+        }
+
+        // Cancel the media thread
+        if (pSampleConfiguration->mediaThreadStarted) {
+            DLOGD("Canceling media thread");
+            THREAD_CANCEL(pSampleConfiguration->mediaSenderTid);
+        }
+
+        if (IS_VALID_MUTEX_VALUE(pSampleConfiguration->sampleConfigurationObjLock)) {
+            MUTEX_UNLOCK(pSampleConfiguration->sampleConfigurationObjLock);
+        }
 
         if (pSampleConfiguration->mediaSenderTid != INVALID_TID_VALUE) {
             THREAD_JOIN(pSampleConfiguration->mediaSenderTid, NULL);
         }
 
+        if (pSampleConfiguration->enableFileLogging) {
+            freeFileLogger();
+        }
         retStatus = signalingClientGetMetrics(pSampleConfiguration->signalingClientHandle, &signalingClientMetrics);
         if (retStatus == STATUS_SUCCESS) {
             logSignalingClientStats(&signalingClientMetrics);
         } else {
-            DLOGE("[KVS Master] signalingClientGetMetrics() operation returned status code: 0x%08x", retStatus);
+            printf("[KVS Master] signalingClientGetMetrics() operation returned status code: 0x%08x\n", retStatus);
         }
         retStatus = freeSignalingClient(&pSampleConfiguration->signalingClientHandle);
         if (retStatus != STATUS_SUCCESS) {
-            DLOGE("[KVS Master] freeSignalingClient(): operation returned status code: 0x%08x", retStatus);
+            printf("[KVS Master] freeSignalingClient(): operation returned status code: 0x%08x\n", retStatus);
         }
 
         retStatus = freeSampleConfiguration(&pSampleConfiguration);
         if (retStatus != STATUS_SUCCESS) {
-            DLOGE("[KVS Master] freeSampleConfiguration(): operation returned status code: 0x%08x", retStatus);
+            printf("[KVS Master] freeSampleConfiguration(): operation returned status code: 0x%08x", retStatus);
         }
     }
-    DLOGI("[KVS Master] Cleanup done");
-    CHK_LOG_ERR(retStatus);
+    printf("[KVS Master] Cleanup done\n");
 
     /* Media Interface Destruct */
     if (audioCapturerHandle) {
-        audioCapturerDestroy(audioCapturerHandle);
+        audioCapturerDestory(audioCapturerHandle);
         audioCapturerHandle = NULL;
     }
 
     if (audioPlayerHandle) {
-        audioPlayerDestroy(audioPlayerHandle);
+        audioPlayerDestory(audioPlayerHandle);
         audioPlayerHandle = NULL;
     }
 
     if (videoCapturerHandle) {
-        videoCapturerDestroy(videoCapturerHandle);
+        videoCapturerDestory(videoCapturerHandle);
         videoCapturerHandle = NULL;
     }
 
@@ -261,33 +327,31 @@ PVOID sendVideoPackets(PVOID args)
     UINT64 timestamp = 0;
     SIZE_T frameSize = 0;
 
-    CHK_ERR(pSampleConfiguration != NULL, STATUS_NULL_ARG, "[KVS Master] Streaming session is NULL");
+    if (pSampleConfiguration == NULL) {
+        printf("[KVS Master] sendVideoPackets(): operation returned status code: 0x%08x \n", STATUS_NULL_ARG);
+        goto CleanUp;
+    }
 
     pFrameBuffer = MEMALLOC(VIDEO_FRAME_BUFFER_SIZE_BYTES);
 
-    CHK_ERR(pFrameBuffer != NULL, STATUS_NOT_ENOUGH_MEMORY, "[KVS Master] OOM when allocating buffer");
-    CHK_ERR(videoCapturerHandle != NULL, STATUS_NULL_ARG, "[KVS Master] VideoCapturerHandle is NULL");
-    CHK_ERR(videoCapturerAcquireStream(videoCapturerHandle) == 0, STATUS_INVALID_OPERATION, "[KVS Master] Acquire video stream failed");
+    if (!pFrameBuffer) {
+        printf("[KVS Master] OOM \n");
+        goto CleanUp;
+    }
 
-    int getFrameStatus = 0;
+    if (videoCapturerAcquireStream(videoCapturerHandle)) {
+        goto CleanUp;
+    }
+
     while (!ATOMIC_LOAD_BOOL(&pSampleConfiguration->appTerminateFlag)) {
-        getFrameStatus = videoCapturerGetFrame(videoCapturerHandle, pFrameBuffer, VIDEO_FRAME_BUFFER_SIZE_BYTES, &timestamp, &frameSize);
-        switch (getFrameStatus) {
-            case 0:
-                // successfully get a frame
-                writeFrameToAllSessions(timestamp * HUNDREDS_OF_NANOS_IN_A_MICROSECOND, pFrameBuffer, frameSize, SAMPLE_VIDEO_TRACK_ID);
-                break;
-            case -EAGAIN:
-                // frame is not ready yet
-                usleep(1000);
-                break;
-            default:
-                DLOGE("videoCapturerGetFrame failed");
+        if (videoCapturerGetFrame(videoCapturerHandle, pFrameBuffer, VIDEO_FRAME_BUFFER_SIZE_BYTES, &timestamp, &frameSize)) {
+            printf("videoCapturerGetFrame failed\n");
+        } else {
+            writeFrameToAllSessions(timestamp * HUNDREDS_OF_NANOS_IN_A_MICROSECOND, pFrameBuffer, frameSize, SAMPLE_VIDEO_TRACK_ID);
         }
     }
 
 CleanUp:
-    DLOGI("[KVS Master] Closing video thread");
 
     videoCapturerReleaseStream(videoCapturerHandle);
 
@@ -307,33 +371,31 @@ PVOID sendAudioPackets(PVOID args)
     UINT64 timestamp = 0;
     SIZE_T frameSize = 0;
 
-    CHK_ERR(pSampleConfiguration != NULL, STATUS_NULL_ARG, "[KVS Master] Streaming session is NULL");
+    if (pSampleConfiguration == NULL) {
+        printf("[KVS Master] sendAudioPackets(): operation returned status code: 0x%08x \n", STATUS_NULL_ARG);
+        goto CleanUp;
+    }
 
     pFrameBuffer = MEMALLOC(AUDIO_FRAME_BUFFER_SIZE_BYTES);
 
-    CHK_ERR(pFrameBuffer != NULL, STATUS_NOT_ENOUGH_MEMORY, "[KVS Master] OOM when allocating buffer");
-    CHK_ERR(audioCapturerHandle != NULL, STATUS_NULL_ARG, "[KVS Master] AudioCapturerHandle is NULL");
-    CHK_ERR(audioCapturerAcquireStream(audioCapturerHandle) == 0, STATUS_INVALID_OPERATION, "[KVS Master] Acquire audio stream failed");
+    if (!pFrameBuffer) {
+        printf("[KVS Master] OOM \n");
+        goto CleanUp;
+    }
 
-    int getFrameStatus = 0;
+    if (audioCapturerAcquireStream(audioCapturerHandle)) {
+        goto CleanUp;
+    }
+
     while (!ATOMIC_LOAD_BOOL(&pSampleConfiguration->appTerminateFlag)) {
-        getFrameStatus = audioCapturerGetFrame(audioCapturerHandle, pFrameBuffer, AUDIO_FRAME_BUFFER_SIZE_BYTES, &timestamp, &frameSize);
-        switch (getFrameStatus) {
-            case 0:
-                // successfully get a frame
-                writeFrameToAllSessions(timestamp * HUNDREDS_OF_NANOS_IN_A_MICROSECOND, pFrameBuffer, frameSize, SAMPLE_AUDIO_TRACK_ID);
-                break;
-            case -EAGAIN:
-                // frame is not ready yet
-                usleep(1000);
-                break;
-            default:
-                DLOGE("audioCapturerGetFrame failed");
+        if (audioCapturerGetFrame(audioCapturerHandle, pFrameBuffer, AUDIO_FRAME_BUFFER_SIZE_BYTES, &timestamp, &frameSize)) {
+            printf("audioCapturerGetFrame failed\n");
+        } else {
+            writeFrameToAllSessions(timestamp * HUNDREDS_OF_NANOS_IN_A_MICROSECOND, pFrameBuffer, frameSize, SAMPLE_AUDIO_TRACK_ID);
         }
     }
 
 CleanUp:
-    DLOGI("[KVS Master] closing audio thread");
 
     audioCapturerReleaseStream(audioCapturerHandle);
 
@@ -349,9 +411,16 @@ PVOID sampleReceiveAudioVideoFrame(PVOID args)
 {
     STATUS retStatus = STATUS_SUCCESS;
     PSampleStreamingSession pSampleStreamingSession = (PSampleStreamingSession) args;
-    CHK_ERR(pSampleStreamingSession != NULL, STATUS_NULL_ARG, "[KVS Master] Streaming session is NULL");
-    CHK_STATUS(transceiverOnFrame(pSampleStreamingSession->pVideoRtcRtpTransceiver, (UINT64) pSampleStreamingSession, sampleVideoFrameHandler));
-    CHK_STATUS(transceiverOnFrame(pSampleStreamingSession->pAudioRtcRtpTransceiver, (UINT64) pSampleStreamingSession, remoteAudioFrameHandler));
+    if (pSampleStreamingSession == NULL) {
+        printf("[KVS Master] sampleReceiveAudioVideoFrame(): operation returned status code: 0x%08x \n", STATUS_NULL_ARG);
+        goto CleanUp;
+    }
+
+    retStatus = transceiverOnFrame(pSampleStreamingSession->pAudioRtcRtpTransceiver, (UINT64) pSampleStreamingSession, remoteAudioFrameHandler);
+    if (retStatus != STATUS_SUCCESS) {
+        printf("[KVS Master] transceiverOnFrame(): operation returned status code: 0x%08x \n", retStatus);
+        goto CleanUp;
+    }
 
 CleanUp:
 

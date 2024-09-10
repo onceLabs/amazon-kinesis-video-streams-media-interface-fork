@@ -111,7 +111,7 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle);
  *
  * @param[in] handle Handle of VideoCapturer.
  */
-void videoCapturerDestroy(VideoCapturerHandle handle);
+void videoCapturerDestory(VideoCapturerHandle handle);
 
 #ifdef __cplusplus
 }

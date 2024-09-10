@@ -117,7 +117,7 @@ int audioCapturerReleaseStream(AudioCapturerHandle handle);
  *
  * @param[in] handle Handle of AudioCapturer.
  */
-void audioCapturerDestroy(AudioCapturerHandle handle);
+void audioCapturerDestory(AudioCapturerHandle handle);
 
 #ifdef __cplusplus
 }

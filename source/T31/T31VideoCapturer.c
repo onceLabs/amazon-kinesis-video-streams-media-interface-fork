@@ -153,7 +153,7 @@ VideoCapturerHandle videoCapturerCreate(void)
     return (VideoCapturerHandle) t31Handle;
 }
 
-VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
+VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle const handle)
 {
     if (!handle) {
         return VID_CAP_STATUS_NOT_READY;
@@ -163,7 +163,7 @@ VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
     return t31Handle->status;
 }
 
-int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability* pCapability)
+int videoCapturerGetCapability(const VideoCapturerHandle const handle, VideoCapability* pCapability)
 {
     T31_HANDLE_NULL_CHECK(handle);
     T31_HANDLE_GET(handle);
@@ -274,7 +274,7 @@ int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format,
     return 0;
 }
 
-int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pFormat, VideoResolution* pResolution)
+int videoCapturerGetFormat(const VideoCapturerHandle const handle, VideoFormat* pFormat, VideoResolution* pResolution)
 {
     T31_HANDLE_NULL_CHECK(handle);
     T31_HANDLE_GET(handle);
@@ -385,7 +385,7 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
 }
 
-void videoCapturerDestroy(VideoCapturerHandle handle)
+void videoCapturerDestory(VideoCapturerHandle handle)
 {
     if (!handle) {
         return;
@@ -401,7 +401,7 @@ void videoCapturerDestroy(VideoCapturerHandle handle)
     if (chn[t31Handle->channelNum].enable) {
         if (t31Handle->format != VID_FMT_RAW) {
             if (IMP_System_UnBind(&chn[t31Handle->channelNum].framesource_chn, &chn[t31Handle->channelNum].imp_encoder)) {
-                LOG("UnBind FrameSource channel%d and Encoder failed", t31Handle->channelNum);
+                LOG("UnBind FrameSource channel%d and Encoder failed");
             }
             sample_encoder_exit();
         }
