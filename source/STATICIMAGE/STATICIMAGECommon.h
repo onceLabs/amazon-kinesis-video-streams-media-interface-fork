@@ -16,23 +16,23 @@
 
 #include <stdio.h>
 
-#define FILE_HANDLE_NULL_CHECK(x)                                                                                                                    \
+#define STATICIMAGE_HANDLE_NULL_CHECK(x)                                                                                                                    \
     if (!(x)) {                                                                                                                                      \
         return -EINVAL;                                                                                                                              \
     }
-#define FILE_HANDLE_STATUS_CHECK(fileHandle, expectedStatus)                                                                                         \
+#define STATICIMAGE_HANDLE_STATUS_CHECK(fileHandle, expectedStatus)                                                                                         \
     if ((fileHandle)->status != (expectedStatus)) {                                                                                                  \
         return -EAGAIN;                                                                                                                              \
     }
 
-#define GET_FILE_SIZE(f, size)                                                                                                                       \
+#define GET_STATICIMAGE_SIZE(f, size)                                                                                                                       \
     do {                                                                                                                                             \
         fseek((f), 0, SEEK_END);                                                                                                                     \
         (size) = ftell((f));                                                                                                                         \
         rewind((f));                                                                                                                                 \
     } while (0)
 
-#define CLOSE_FILE(f)                                                                                                                                \
+#define CLOSE_STATICIMAGE(f)                                                                                                                                \
     do {                                                                                                                                             \
         fclose((f));                                                                                                                                 \
         (f) = NULL;                                                                                                                                  \
@@ -40,4 +40,4 @@
 
 #define LOG(msg, ...) printf(msg "\n", ##__VA_ARGS__)
 
-#define FRAME_FILE_PATH_MAX_LENGTH (512)
+#define FRAME_STATICIMAGE_PATH_MAX_LENGTH (512)
