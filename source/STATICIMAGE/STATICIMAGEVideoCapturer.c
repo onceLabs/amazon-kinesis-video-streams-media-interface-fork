@@ -21,6 +21,9 @@
 #include "STATICIMAGEPort.h"
 #include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
 
+// image source
+#include "keyframe.h"
+
 #define FRAME_FILE_POSTFIX_H264     ".h264"
 #define FRAME_FILE_START_INDEX_H264 (1)
 #define FRAME_FILE_END_INDEX_H264   (240)

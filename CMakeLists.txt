@@ -38,6 +38,8 @@ elseif(BOARD STREQUAL "T31")
 elseif(BOARD STREQUAL "FH8626V100")
     message(STATUS "Selected board FH8626V100")
 elseif(BOARD STREQUAL "STATICIMAGE")
+    # including root repo src/image/include
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../src/image/include)
     message(STATUS "Selected board STATICIMAGE")
 elseif(BOARD STREQUAL "ANIMATION")
     message(STATUS "Selected board ANIMATION")
