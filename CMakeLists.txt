@@ -10,6 +10,13 @@ set(CMAKE_EXE_LINKER_FLAGS_INIT "--specs=nosys.specs") #picolibc?
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_VERSION "0.0.0")
 
+# Define the target CPU and architecture
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=cortex-m33 -march=armv8-m.main+dsp")
+
+# Enable thumb mode explicitly
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mthumb")
+
+
     set(CMAKE_C_STANDARD 99)
     set(CMAKE_C_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_STANDARD 11)
@@ -95,7 +102,7 @@ endif()
 target_compile_definitions(embedded-media-static PRIVATE "FRAME_FILE_PATH_PREFIX=\"${FRAME_FILE_PATH_PREFIX}\"")
 # target_compile_definitions(embedded-media-shared PRIVATE "FRAME_FILE_PATH_PREFIX=\"${FRAME_FILE_PATH_PREFIX}\"")
 
-include(GNUInstallDirs)
+# include(GNUInstallDirs)
 
 install(TARGETS embedded-media-static
         LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
