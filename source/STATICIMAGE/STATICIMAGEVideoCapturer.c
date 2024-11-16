@@ -24,13 +24,13 @@
 // image source
 #include "keyframe.h"
 
-#define FRAME_FILE_POSTFIX_H264     ".h264"
-#define FRAME_FILE_START_INDEX_H264 (1)
-#define FRAME_FILE_END_INDEX_H264   (240)
-#define FRAME_FILE_PATH_FORMAT_H264 FRAME_FILE_PATH_PREFIX "h264/frame-%03d" FRAME_FILE_POSTFIX_H264
-#define FRAME_FILE_DURATION_US_H264 (1000 * 1000 / 25UL)
+#define FRAME_STATICIMAGE_POSTFIX_H264     ".h264"
+#define FRAME_STATICIMAGE_START_INDEX_H264 (1)
+#define FRAME_STATICIMAGE_END_INDEX_H264   (240)
+#define FRAME_STATICIMAGE_PATH_FORMAT_H264 FRAME_STATICIMAGE_PATH_PREFIX "h264/frame-%03d" FRAME_STATICIMAGE_POSTFIX_H264
+#define FRAME_STATICIMAGE_DURATION_US_H264 (1000 * 1000 / 25UL)
 
-#define FILE_HANDLE_GET(x) FILEVideoCapturer* fileHandle = (FILEVideoCapturer*) ((x))
+#define STATICIMAGE_HANDLE_GET(x) STATICIMAGEVideoCapturer* fileHandle = (STATICIMAGEVideoCapturer*) ((x))
 
 typedef struct {
     VideoCapturerStatus status;
@@ -41,13 +41,13 @@ typedef struct {
     size_t frameIndex;
     size_t frameIndexStart;
     size_t frameIndexEnd;
-    FILE* frameFile;
-} FILEVideoCapturer;
+    STATICIMAGE* frameFile;
+} STATICIMAGEVideoCapturer;
 
 static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newStatus)
 {
-    FILE_HANDLE_NULL_CHECK(handle);
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_NULL_CHECK(handle);
+    STATICIMAGE_HANDLE_GET(handle);
 
     if (newStatus != fileHandle->status) {
         fileHandle->status = newStatus;
@@ -59,14 +59,14 @@ static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newSt
 
 VideoCapturerHandle videoCapturerCreate(void)
 {
-    FILEVideoCapturer* fileHandle = NULL;
+    STATICIMAGEVideoCapturer* fileHandle = NULL;
 
-    if (!(fileHandle = (FILEVideoCapturer*) malloc(sizeof(FILEVideoCapturer)))) {
+    if (!(fileHandle = (STATICIMAGEVideoCapturer*) malloc(sizeof(STATICIMAGEVideoCapturer)))) {
         LOG("OOM");
         return NULL;
     }
 
-    memset(fileHandle, 0, sizeof(FILEVideoCapturer));
+    memset(fileHandle, 0, sizeof(STATICIMAGEVideoCapturer));
 
     // Now we have sample frames for H.264, 1080p
     fileHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
@@ -83,14 +83,14 @@ VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
         return VID_CAP_STATUS_NOT_READY;
     }
 
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_GET(handle);
     return fileHandle->status;
 }
 
 int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability* pCapability)
 {
-    FILE_HANDLE_NULL_CHECK(handle);
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_NULL_CHECK(handle);
+    STATICIMAGE_HANDLE_GET(handle);
 
     if (!pCapability) {
         return -EAGAIN;
@@ -103,16 +103,16 @@ int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability
 
 int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format, const VideoResolution resolution)
 {
-    FILE_HANDLE_NULL_CHECK(handle);
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_NULL_CHECK(handle);
+    STATICIMAGE_HANDLE_GET(handle);
 
-    FILE_HANDLE_STATUS_CHECK(fileHandle, VID_CAP_STATUS_STREAM_OFF);
+    STATICIMAGE_HANDLE_STATUS_CHECK(fileHandle, VID_CAP_STATUS_STREAM_OFF);
 
     switch (format) {
         case VID_FMT_H264:
-            fileHandle->framePathFormat = FRAME_FILE_PATH_FORMAT_H264;
-            fileHandle->frameIndexStart = FRAME_FILE_START_INDEX_H264;
-            fileHandle->frameIndexEnd = FRAME_FILE_END_INDEX_H264;
+            fileHandle->framePathFormat = FRAME_STATICIMAGE_PATH_FORMAT_H264;
+            fileHandle->frameIndexStart = FRAME_STATICIMAGE_START_INDEX_H264;
+            fileHandle->frameIndexEnd = FRAME_STATICIMAGE_END_INDEX_H264;
             break;
 
         default:
@@ -137,8 +137,8 @@ int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format,
 
 int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pFormat, VideoResolution* pResolution)
 {
-    FILE_HANDLE_NULL_CHECK(handle);
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_NULL_CHECK(handle);
+    STATICIMAGE_HANDLE_GET(handle);
 
     *pFormat = fileHandle->format;
     *pResolution = fileHandle->resolution;
@@ -148,8 +148,8 @@ int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pForma
 
 int videoCapturerAcquireStream(VideoCapturerHandle handle)
 {
-    FILE_HANDLE_NULL_CHECK(handle);
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_NULL_CHECK(handle);
+    STATICIMAGE_HANDLE_GET(handle);
 
     fileHandle->frameIndex = fileHandle->frameIndexStart;
 
@@ -159,10 +159,10 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
 int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, const size_t frameDataBufferSize, uint64_t* pTimestamp,
                           size_t* pFrameSize)
 {
-    FILE_HANDLE_NULL_CHECK(handle);
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_NULL_CHECK(handle);
+    STATICIMAGE_HANDLE_GET(handle);
 
-    FILE_HANDLE_STATUS_CHECK(fileHandle, VID_CAP_STATUS_STREAM_ON);
+    STATICIMAGE_HANDLE_STATUS_CHECK(fileHandle, VID_CAP_STATUS_STREAM_ON);
 
     if (!pFrameDataBuffer || !pTimestamp || !pFrameSize) {
         return -EINVAL;
@@ -171,11 +171,11 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     int ret = 0;
 
     if (fileHandle->frameFile) {
-        CLOSE_FILE(fileHandle->frameFile);
+        CLOSE_STATICIMAGE(fileHandle->frameFile);
     }
 
-    char filePath[FRAME_FILE_PATH_MAX_LENGTH] = {0};
-    snprintf(filePath, FRAME_FILE_PATH_MAX_LENGTH, fileHandle->framePathFormat, fileHandle->frameIndex);
+    char filePath[FRAME_STATICIMAGE_PATH_MAX_LENGTH] = {0};
+    snprintf(filePath, FRAME_STATICIMAGE_PATH_MAX_LENGTH, fileHandle->framePathFormat, fileHandle->frameIndex);
     if (fileHandle->frameIndex < fileHandle->frameIndexEnd) {
         fileHandle->frameIndex++;
     } else {
@@ -185,7 +185,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     size_t frameSize = 0;
     fileHandle->frameFile = fopen(filePath, "r");
     if (fileHandle->frameFile) {
-        GET_FILE_SIZE(fileHandle->frameFile, frameSize);
+        GET_STATICIMAGE_SIZE(fileHandle->frameFile, frameSize);
         if (frameSize >= 0) {
             if (frameDataBufferSize >= frameSize) {
                 *pFrameSize = fread(pFrameDataBuffer, 1, frameSize, fileHandle->frameFile);
@@ -199,26 +199,26 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
             LOG("Failed to get size of file %s", filePath);
             ret = -EAGAIN;
         }
-        CLOSE_FILE(fileHandle->frameFile);
+        CLOSE_STATICIMAGE(fileHandle->frameFile);
     } else {
         LOG("Failed to open file %s", filePath);
         ret = -EAGAIN;
     }
 
-    usleep(FRAME_FILE_DURATION_US_H264);
+    usleep(FRAME_STATICIMAGE_DURATION_US_H264);
 
     return ret;
 }
 
 int videoCapturerReleaseStream(VideoCapturerHandle handle)
 {
-    FILE_HANDLE_NULL_CHECK(handle);
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_NULL_CHECK(handle);
+    STATICIMAGE_HANDLE_GET(handle);
 
-    FILE_HANDLE_STATUS_CHECK(fileHandle, VID_CAP_STATUS_STREAM_ON);
+    STATICIMAGE_HANDLE_STATUS_CHECK(fileHandle, VID_CAP_STATUS_STREAM_ON);
 
     if (fileHandle->frameFile) {
-        CLOSE_FILE(fileHandle->frameFile);
+        CLOSE_STATICIMAGE(fileHandle->frameFile);
     }
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
@@ -230,7 +230,7 @@ void videoCapturerDestory(VideoCapturerHandle handle)
         return;
     }
 
-    FILE_HANDLE_GET(handle);
+    STATICIMAGE_HANDLE_GET(handle);
 
     if (fileHandle->status == VID_CAP_STATUS_STREAM_ON) {
         videoCapturerReleaseStream(handle);
