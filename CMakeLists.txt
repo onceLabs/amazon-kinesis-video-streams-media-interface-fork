@@ -65,11 +65,18 @@ set(INCS
     ${INCS_DIR}/com/amazonaws/kinesis/video/player/AudioPlayer.h
     ${ROOT_BUILD_DIR}/zephyr/include/generated/autoconf.h
 )
-set(SRCS
+
+# TODO add def'n if guard for video track
+set(SRCS 
     ${CMAKE_CURRENT_LIST_DIR}/source/${BOARD}/${BOARD}VideoCapturer.c
+)
+
+if(ENABLE_AUDIO_TRACK)
+    set(SRCS
     ${CMAKE_CURRENT_LIST_DIR}/source/${BOARD}/${BOARD}AudioCapturer.c
     ${CMAKE_CURRENT_LIST_DIR}/source/${BOARD}/${BOARD}AudioPlayer.c
-)
+    )
+endif()
 
 if(NOT BOARD_DESTINATION_PLATFORM OR BOARD_DESTINATION_PLATFORM STREQUAL "")
     set(BOARD_DESTINATION_PLATFORM OFF)
