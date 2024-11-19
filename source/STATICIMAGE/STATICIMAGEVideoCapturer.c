@@ -79,8 +79,8 @@ VideoCapturerHandle videoCapturerCreate(void)
     imageHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
     imageHandle->capability.resolutions = (1 << (VID_RES_1080P - 1));
 
-    imageHandle->buffer = keyframe_h264;
-    imageHandle->buffer_size = sizeof(keyframe_h264);
+    imageHandle->buffer = frame_001_h264;
+    imageHandle->buffer_size = sizeof(frame_001_h264);
 
 
     setStatus((VideoCapturerHandle) imageHandle, VID_CAP_STATUS_STREAM_OFF);
@@ -160,6 +160,8 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
 {
     STATICIMAGE_HANDLE_NULL_CHECK(handle);
     STATICIMAGE_HANDLE_GET(handle);
+
+    LOG("Acquiring stream");
 
     imageHandle->frameIndex = imageHandle->frameIndexStart;
 
