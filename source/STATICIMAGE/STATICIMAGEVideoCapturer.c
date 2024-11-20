@@ -185,9 +185,10 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     size_t frameSize = imageHandle->buffer_size;
 
     // increment frame index
-    imageHandle->frameIndex++ % imageHandle->frameIndexEnd;
+    imageHandle->frameIndex = imageHandle->frameIndex++ % imageHandle->frameIndexEnd;
 
-    pTimestamp = getEpochTimestampInUs();
+    *pTimestamp = getEpochTimestampInUs();
+    *pFrameSize = frameSize;
 
     // read image
     // TODO check available buffer size relative to frame size
