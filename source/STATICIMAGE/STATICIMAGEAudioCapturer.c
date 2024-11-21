@@ -17,8 +17,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "FILECommon.h"
-#include "FILEPort.h"
+#include "STATICIMAGECommon.h"
+#include "STATICIMAGEPort.h"
 #include "com/amazonaws/kinesis/video/capturer/AudioCapturer.h"
 
 #define FRAME_FILE_POSTFIX_AAC       ".aac"

@@ -13,14 +13,13 @@ message(STATUS "EMBEDDED_MEDIA_INCLUDES_DIR - ${EMBEDDED_MEDIA_INCLUDES_DIR}")
 message(STATUS "EMBEDDED_MEDIA_LINK_DIR - ${EMBEDDED_MEDIA_LINK_DIR}")
 message(STATUS "USE_MUCLIBC - ${USE_MUCLIBC}")
 message(STATUS "BOARD_DESTINATION_PLATFORM - ${BOARD_DESTINATION_PLATFORM}")
-message(STATUS "BOARD_SRC_PREFIX - ${BOARD_SRC_PREFIX}")
 
 set(WEBRTC_CMAKE_C_FLAGS "-fPIC -std=gnu99")
 
 include(ExternalProject)
 ExternalProject_Add(kvs-webrtc
   GIT_REPOSITORY    https://github.com/awslabs/amazon-kinesis-video-streams-webrtc-sdk-c.git
-  GIT_TAG           v1.8.1
+  GIT_TAG           v1.7.3
   CMAKE_ARGS        -DADD_MUCLIBC=${USE_MUCLIBC}
                     -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DBUILD_STATIC_LIBS=ON -DBUILD_SAMPLE=OFF -DBUILD_LIBSRTP_DESTINATION_PLATFORM=${BOARD_DESTINATION_PLATFORM} -DCMAKE_INSTALL_PREFIX=${AWS_DEPENDENCIES_DIR}/webrtc/
                     -DCMAKE_BUILD_TYPE=Release -DOPEN_SRC_INSTALL_PREFIX=${AWS_DEPENDENCIES_DIR}/webrtc/
@@ -76,18 +75,3 @@ add_dependencies(kvswebrtcmaster-static kvs-webrtc embedded-media-static)
 target_include_directories(kvswebrtcmaster-static PRIVATE ${AWS_DEPENDENCIES_DIR}/webrtc/include/ ${EMBEDDED_MEDIA_INCLUDES_DIR})
 target_link_directories(kvswebrtcmaster-static PRIVATE ${AWS_DEPENDENCIES_DIR}/webrtc/lib/ ${EMBEDDED_MEDIA_LINK_DIR})
 target_link_libraries(kvswebrtcmaster-static embedded-media-static ${WEBRTC_SDK_LIBS_STATIC} ${BOARD_LIBS_STATIC})
-
-include(CheckLibraryExists)
-CHECK_LIBRARY_EXISTS(cap cap_set_flag "" LWS_HAVE_LIBCAP)
-if (LWS_HAVE_LIBCAP)
-    target_link_libraries(kvswebrtcmaster-shared cap)
-    target_link_libraries(kvswebrtcmaster-static cap)
-endif()
-
-include(GNUInstallDirs)
-
-install(TARGETS kvswebrtcmaster-shared
-    RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
-
-install(TARGETS kvswebrtcmaster-static
-    RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})

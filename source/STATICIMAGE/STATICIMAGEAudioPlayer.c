@@ -14,7 +14,7 @@
  */
 #include <errno.h>
 
-#include "FILECommon.h"
+#include "STATICIMAGECommon.h"
 #include "com/amazonaws/kinesis/video/player/AudioPlayer.h"
 
 typedef struct {

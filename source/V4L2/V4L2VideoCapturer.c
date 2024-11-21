@@ -64,7 +64,7 @@ VideoCapturerHandle videoCapturerCreate(void)
 
     if (!v4l2Handle->privHandle) {
         LOG("Failed to open /dev/video0");
-        videoCapturerDestroy((VideoCapturerHandle) v4l2Handle);
+        videoCapturerDestory((VideoCapturerHandle) v4l2Handle);
         return NULL;
     }
 
@@ -78,7 +78,7 @@ VideoCapturerHandle videoCapturerCreate(void)
     return (VideoCapturerHandle) v4l2Handle;
 }
 
-VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
+VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle const handle)
 {
     if (!handle) {
         return VID_CAP_STATUS_NOT_READY;
@@ -88,7 +88,7 @@ VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
     return v4l2Handle->status;
 }
 
-int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability* pCapability)
+int videoCapturerGetCapability(const VideoCapturerHandle const handle, VideoCapability* pCapability)
 {
     V4L2_HANDLE_NULL_CHECK(handle);
     V4L2_HANDLE_GET(handle);
@@ -160,7 +160,7 @@ int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format,
     return 0;
 }
 
-int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pFormat, VideoResolution* pResolution)
+int videoCapturerGetFormat(const VideoCapturerHandle const handle, VideoFormat* pFormat, VideoResolution* pResolution)
 {
     V4L2_HANDLE_NULL_CHECK(handle);
     V4L2_HANDLE_GET(handle);
@@ -176,7 +176,7 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     V4L2_HANDLE_NULL_CHECK(handle);
     V4L2_HANDLE_GET(handle);
 
-    if (v4l2CapturerStartStreaming(v4l2Handle->privHandle)) {
+    if (!v4l2CapturerStartStreaming(v4l2Handle->privHandle)) {
         LOG("Failed to acquire stream");
         return -EAGAIN;
     }
@@ -205,7 +205,7 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
     V4L2_HANDLE_NULL_CHECK(handle);
     V4L2_HANDLE_GET(handle);
 
-    if (v4l2CapturerStopStreaming(v4l2Handle->privHandle)) {
+    if (!v4l2CapturerStopStreaming(v4l2Handle->privHandle)) {
         LOG("Failed to release stream");
         return -EAGAIN;
     }
@@ -213,7 +213,7 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
 }
 
-void videoCapturerDestroy(VideoCapturerHandle handle)
+void videoCapturerDestory(VideoCapturerHandle handle)
 {
     if (!handle) {
         return;
