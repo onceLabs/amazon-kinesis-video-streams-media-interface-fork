@@ -3,6 +3,8 @@ project(embedded-media VERSION 1.0.0 LANGUAGES C CXX)
 
 # Link with top level CMakeLists.txt
 
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+zephyr_include_directories(.)
 
 set(CMAKE_CROSSCOMPILING "TRUE")
 set(CMAKE_SYSTEM_PROCESSOR "armv8-m")
@@ -17,11 +19,11 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=cortex-m33 -march=armv8-m.main+dsp")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mthumb")
 
 
-    set(CMAKE_C_STANDARD 99)
-    set(CMAKE_C_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_STANDARD 11)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    # set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(USE_MUCLIBC "Use muclibc" OFF)
 
@@ -37,6 +39,7 @@ elseif(BOARD STREQUAL "T31")
     message(STATUS "Selected board T31")
 elseif(BOARD STREQUAL "FH8626V100")
     message(STATUS "Selected board FH8626V100")
+<<<<<<< HEAD
 elseif(BOARD STREQUAL "STATICIMAGE")
     # including root repo src/image/include
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../src/image/include)
@@ -45,6 +48,16 @@ elseif(BOARD STREQUAL "ANIMATION")
     message(STATUS "Selected board ANIMATION")
 elseif(BOARD STREQUAL "LIVESTREAM")
     message(STATUS "Selected board LIVESTREAM")
+=======
+elseif(BOARD STREQUAL "AK3918")
+    message(STATUS "Selected board AK3918")
+elseif(BOARD STREQUAL "C302")
+    message(STATUS "Selected board C302")
+elseif(BOARD STREQUAL "SV82x")
+    message(STATUS "Selected board SV82x")
+elseif(BOARD STREQUAL "NRF5340" OR BOARD STREQUAL "nrf7002dk_nrf5340_cpuapp")
+    message(STATUS "Selected board NRF5340")
+>>>>>>> 272d541cc8ef9e84260d45845a00705d8ccb35a1
 else()
     message(FATAL_ERROR "${BOARD} is not implemented yet.")
 endif()
@@ -52,7 +65,7 @@ endif()
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/${BOARD}.cmake)
 # Board Specific Parts End
 
-option(BUILD_WEBRTC_SAMPLES "Build webrtc samples" ON)
+option(BUILD_WEBRTC_SAMPLES "Build webrtc samples" OFF)
 option(BUILD_KVS_SAMPLES "Build KVS Producer samples" OFF)
 option(BUILD_SAVE_FRAME_SAMPLES "Build save frame samples" OFF)
 
@@ -98,15 +111,36 @@ set_target_properties(embedded-media-static PROPERTIES PUBLIC_HEADER "${INCS}")
 set_target_properties(embedded-media-static PROPERTIES OUTPUT_NAME embedded-media)
 
 # add_library(embedded-media-shared SHARED ${SRCS} ${BOARD_SRCS})
+<<<<<<< HEAD
 if(BOARD_BUILD_DEPENDS AND NOT (BOARD_BUILD_DEPENDS STREQUAL ""))
     add_dependencies(embedded-media-shared ${BOARD_BUILD_DEPENDS})
 endif()
+=======
+
+# if(BOARD_BUILD_DEPENDS AND NOT(BOARD_BUILD_DEPENDS STREQUAL ""))
+#     add_dependencies(embedded-media-shared ${BOARD_BUILD_DEPENDS})
+# endif()
+
+>>>>>>> 272d541cc8ef9e84260d45845a00705d8ccb35a1
 # target_include_directories(embedded-media-shared PRIVATE ${BOARD_INCS_DIR})
 # target_include_directories(embedded-media-shared PUBLIC ${INCS_DIR})
 # target_link_directories(embedded-media-shared PUBLIC ${BOARD_LIBS_DIR})
 # target_link_libraries(embedded-media-shared PRIVATE ${BOARD_LIBS_SHARED})
 # set_target_properties(embedded-media-shared PROPERTIES PUBLIC_HEADER "${INCS}")
 # set_target_properties(embedded-media-shared PROPERTIES OUTPUT_NAME embedded-media)
+<<<<<<< HEAD
+=======
+
+if(BOARD STREQUAL "QCS610" OR BOARD STREQUAL "GSTREAMER")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+    pkg_check_modules(GSTAPP REQUIRED gstreamer-app-1.0)
+    target_include_directories(embedded-media-static PRIVATE ${GSTREAMER_INCLUDE_DIRS} ${GSTAPP_INCLUDE_DIRS})
+    target_link_libraries(embedded-media-static ${GSTREAMER_LIBRARIES} ${GSTAPP_LIBRARIES})
+    target_include_directories(embedded-media-shared PRIVATE ${GSTREAMER_INCLUDE_DIRS} ${GSTAPP_INCLUDE_DIRS})
+    target_link_libraries(embedded-media-shared ${GSTREAMER_LIBRARIES} ${GSTAPP_LIBRARIES})
+endif()
+>>>>>>> 272d541cc8ef9e84260d45845a00705d8ccb35a1
 
 if(NOT FRAME_FILE_PATH_PREFIX OR FRAME_FILE_PATH_PREFIX STREQUAL "")
     set(FRAME_FILE_PATH_PREFIX ${CMAKE_CURRENT_LIST_DIR}/resources/frames/)
@@ -122,8 +156,13 @@ install(TARGETS embedded-media-static
         ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 
 # install(TARGETS embedded-media-shared
+<<<<<<< HEAD
 #         LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
 #         ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+=======
+#     LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+#     ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+>>>>>>> 272d541cc8ef9e84260d45845a00705d8ccb35a1
 
 install(DIRECTORY ${INCS_DIR}
         DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR})
