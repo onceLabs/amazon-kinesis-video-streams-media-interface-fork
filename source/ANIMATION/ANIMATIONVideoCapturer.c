@@ -21,6 +21,8 @@
 #include "ANIMATIONPort.h"
 #include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
 
+// #include <zephyr/kernel.h>
+
 // image source
 #include "animation.h"
 
@@ -182,10 +184,15 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
 
     int ret = 0;
 
+    // update buffer
+    imageHandle->buffer = animation_frames[imageHandle->frameIndex];
+    imageHandle->buffer_size = animation_frame_sizes[imageHandle->frameIndex];
+
     size_t frameSize = imageHandle->buffer_size;
 
     // increment frame index
     imageHandle->frameIndex = imageHandle->frameIndex++ % (imageHandle->frameIndexEnd + 1);
+    LOG("Frame index: %d with size: %d", imageHandle->frameIndex, frameSize);
 
     *pTimestamp = getEpochTimestampInUs();
     *pFrameSize = frameSize;
