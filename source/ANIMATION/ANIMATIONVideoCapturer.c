@@ -21,10 +21,13 @@
 #include "ANIMATIONPort.h"
 #include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
 
-// #include <zephyr/kernel.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
 // image source
 #include "animation.h"
+
+LOG_MODULE_REGISTER(animationVideoCapturer, LOG_LEVEL_DBG);
 
 // #define FRAME_ANIMATION_POSTFIX_H264     ".h264"
 // #define FRAME_ANIMATION_START_INDEX_H264 (1)
@@ -191,8 +194,8 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     size_t frameSize = imageHandle->buffer_size;
 
     // increment frame index
-    imageHandle->frameIndex = imageHandle->frameIndex++ % (imageHandle->frameIndexEnd + 1);
-    LOG("Frame index: %d with size: %d", imageHandle->frameIndex, frameSize);
+    imageHandle->frameIndex = ++imageHandle->frameIndex % (imageHandle->frameIndexEnd + 1);
+    LOG_DBG("Frame index: %d with size: %d", imageHandle->frameIndex, frameSize);
 
     *pTimestamp = getEpochTimestampInUs();
     *pFrameSize = frameSize;
@@ -212,6 +215,7 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
     ANIMATION_HANDLE_GET(handle);
 
     ANIMATION_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
+    LOG_DBG("Releasing stream");
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
 }

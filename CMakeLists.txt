@@ -66,6 +66,7 @@ set(INCS
     ${INCS_DIR}/com/amazonaws/kinesis/video/capturer/AudioCapturer.h
     ${INCS_DIR}/com/amazonaws/kinesis/video/player/AudioPlayer.h
     ${ROOT_BUILD_DIR}/zephyr/include/generated/autoconf.h
+    ${ZEPHYR_DIR}/include
 )
 
 # TODO add def'n if guard for video track
@@ -98,6 +99,17 @@ target_link_directories(embedded-media-static PUBLIC ${BOARD_LIBS_DIR})
 target_link_libraries(embedded-media-static PRIVATE ${BOARD_LIBS_STATIC})
 set_target_properties(embedded-media-static PROPERTIES PUBLIC_HEADER "${INCS}")
 set_target_properties(embedded-media-static PROPERTIES OUTPUT_NAME embedded-media)
+
+target_link_libraries(embedded-media-static PRIVATE
+  zephyr_interface
+  zephyr_kernel
+  zephyr_libc
+  zephyr_minimal
+  zephyr_posix
+  zephyr_syscall
+  zephyr_types
+)
+
 
 # add_library(embedded-media-shared SHARED ${SRCS} ${BOARD_SRCS})
 
