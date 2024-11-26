@@ -166,7 +166,7 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     ANIMATION_HANDLE_NULL_CHECK(handle);
     ANIMATION_HANDLE_GET(handle);
 
-    LOG("Acquiring stream");
+    LOG_DBG("Acquiring stream");
 
     imageHandle->frameIndex = imageHandle->frameIndexStart;
 
