@@ -17,24 +17,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "STATICIMAGECommon.h"
-#include "STATICIMAGEPort.h"
+#include "ANIMATIONCommon.h"
+#include "ANIMATIONPort.h"
 #include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
 
 // image source
-#include "keyframe.h"
+#include "animation.h"
 
-// #define FRAME_STATICIMAGE_POSTFIX_H264     ".h264"
-// #define FRAME_STATICIMAGE_START_INDEX_H264 (1)
-#define FRAME_STATICIMAGE_START_INDEX_H264 (0)
-#define FRAME_STATICIMAGE_END_INDEX_H264   (1)
-// #define FRAME_STATICIMAGE_END_INDEX_H264   (240)
-// #define FRAME_STATICIMAGE_PATH_FORMAT_H264 FRAME_STATICIMAGE_PATH_PREFIX "h264/frame-%03d" FRAME_STATICIMAGE_POSTFIX_H264
-// #define FRAME_STATICIMAGE_DURATION_US_H264 (1000 * 1000 / 25UL)
+// #define FRAME_ANIMATION_POSTFIX_H264     ".h264"
+// #define FRAME_ANIMATION_START_INDEX_H264 (1)
+#define FRAME_ANIMATION_START_INDEX_H264 (0)
+#define FRAME_ANIMATION_END_INDEX_H264   (4)
+// #define FRAME_ANIMATION_END_INDEX_H264   (240)
+// #define FRAME_ANIMATION_PATH_FORMAT_H264 FRAME_ANIMATION_PATH_PREFIX "h264/frame-%03d" FRAME_ANIMATION_POSTFIX_H264
+// #define FRAME_ANIMATION_DURATION_US_H264 (1000 * 1000 / 25UL)
 
-#define STATICIMAGE_HANDLE_GET(x) STATICIMAGEVideoCapturer* imageHandle = (STATICIMAGEVideoCapturer*) ((x))
+#define ANIMATION_HANDLE_GET(x) ANIMATIONVideoCapturer* imageHandle = (ANIMATIONVideoCapturer*) ((x))
 
-#define FRAME_STATICIMAGE_DURATION_US_H264 (1000 * 1000 / 25UL)
+#define FRAME_ANIMATION_DURATION_US_H264 (1000 * 1000 / 25UL)
 
 typedef struct {
     VideoCapturerStatus status;
@@ -45,15 +45,15 @@ typedef struct {
     size_t frameIndex;
     size_t frameIndexStart;     // for animation
     size_t frameIndexEnd;       // for animation
-    // STATICIMAGE* frameFile;
+    // ANIMATION* frameFile;
     char *buffer;
     size_t buffer_size;
-} STATICIMAGEVideoCapturer;
+} ANIMATIONVideoCapturer;
 
 static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newStatus)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_NULL_CHECK(handle);
+    ANIMATION_HANDLE_GET(handle);
 
     if (newStatus != imageHandle->status) {
         imageHandle->status = newStatus;
@@ -65,22 +65,22 @@ static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newSt
 
 VideoCapturerHandle videoCapturerCreate(void)
 {
-    STATICIMAGEVideoCapturer* imageHandle = NULL;
+    ANIMATIONVideoCapturer* imageHandle = NULL;
 
 
-    if (!(imageHandle = (STATICIMAGEVideoCapturer*) malloc(sizeof(STATICIMAGEVideoCapturer)))) {
+    if (!(imageHandle = (ANIMATIONVideoCapturer*) malloc(sizeof(ANIMATIONVideoCapturer)))) {
         LOG("OOM");
         return NULL;
     }
 
-    memset(imageHandle, 0, sizeof(STATICIMAGEVideoCapturer));
+    memset(imageHandle, 0, sizeof(ANIMATIONVideoCapturer));
 
     // Now we have sample frames for H.264, 1080p
     imageHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
     imageHandle->capability.resolutions = (1 << (VID_RES_1080P - 1));
 
-    imageHandle->buffer = frame_001_h264;
-    imageHandle->buffer_size = sizeof(frame_001_h264);
+    imageHandle->buffer = animation_frames[imageHandle->frameIndex];
+    imageHandle->buffer_size = animation_frame_sizes[imageHandle->frameIndex];
 
 
     setStatus((VideoCapturerHandle) imageHandle, VID_CAP_STATUS_STREAM_OFF);
@@ -94,14 +94,14 @@ VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
         return VID_CAP_STATUS_NOT_READY;
     }
 
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_GET(handle);
     return imageHandle->status;
 }
 
 int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability* pCapability)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_NULL_CHECK(handle);
+    ANIMATION_HANDLE_GET(handle);
 
     if (!pCapability) {
         return -EAGAIN;
@@ -114,15 +114,15 @@ int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability
 
 int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format, const VideoResolution resolution)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_NULL_CHECK(handle);
+    ANIMATION_HANDLE_GET(handle);
 
-    STATICIMAGE_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_OFF);
+    ANIMATION_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_OFF);
 
     switch (format) {
         case VID_FMT_H264:
-            imageHandle->frameIndexStart = FRAME_STATICIMAGE_START_INDEX_H264;
-            imageHandle->frameIndexEnd = FRAME_STATICIMAGE_END_INDEX_H264;
+            imageHandle->frameIndexStart = FRAME_ANIMATION_START_INDEX_H264;
+            imageHandle->frameIndexEnd = FRAME_ANIMATION_END_INDEX_H264;
             break;
 
         default:
@@ -147,8 +147,8 @@ int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format,
 
 int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pFormat, VideoResolution* pResolution)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_NULL_CHECK(handle);
+    ANIMATION_HANDLE_GET(handle);
 
     *pFormat = imageHandle->format;
     *pResolution = imageHandle->resolution;
@@ -158,8 +158,8 @@ int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pForma
 
 int videoCapturerAcquireStream(VideoCapturerHandle handle)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_NULL_CHECK(handle);
+    ANIMATION_HANDLE_GET(handle);
 
     LOG("Acquiring stream");
 
@@ -171,10 +171,10 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
 int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, const size_t frameDataBufferSize, uint64_t* pTimestamp,
                           size_t* pFrameSize)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_NULL_CHECK(handle);
+    ANIMATION_HANDLE_GET(handle);
 
-    STATICIMAGE_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
+    ANIMATION_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
 
     if (!pFrameDataBuffer || !pTimestamp || !pFrameSize) {
         return -EINVAL;
@@ -185,7 +185,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     size_t frameSize = imageHandle->buffer_size;
 
     // increment frame index
-    imageHandle->frameIndex = imageHandle->frameIndex++ % imageHandle->frameIndexEnd;
+    imageHandle->frameIndex = imageHandle->frameIndex++ % (imageHandle->frameIndexEnd + 1);
 
     *pTimestamp = getEpochTimestampInUs();
     *pFrameSize = frameSize;
@@ -194,17 +194,17 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     // TODO check available buffer size relative to frame size
     memcpy(pFrameDataBuffer, imageHandle->buffer, frameSize); // TODO if out of RAM, do a shallow copy
 
-    usleep(FRAME_STATICIMAGE_DURATION_US_H264);
+    usleep(FRAME_ANIMATION_DURATION_US_H264);
 
     return ret;
 }
 
 int videoCapturerReleaseStream(VideoCapturerHandle handle)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_NULL_CHECK(handle);
+    ANIMATION_HANDLE_GET(handle);
 
-    STATICIMAGE_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
+    ANIMATION_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
 }
@@ -215,7 +215,7 @@ void videoCapturerDestory(VideoCapturerHandle handle)
         return;
     }
 
-    STATICIMAGE_HANDLE_GET(handle);
+    ANIMATION_HANDLE_GET(handle);
 
     if (imageHandle->status == VID_CAP_STATUS_STREAM_ON) {
         videoCapturerReleaseStream(handle);
