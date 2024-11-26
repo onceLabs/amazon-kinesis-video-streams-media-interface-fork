@@ -13,4 +13,5 @@ if(BOARD STREQUAL "ANIMATION")
     )
     set(BOARD_LIBS_STATIC
     )
+
 endif()

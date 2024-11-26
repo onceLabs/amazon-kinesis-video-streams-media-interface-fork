@@ -1,7 +1,7 @@
 #include <stddef.h>
 #include <sys/time.h>
 
-#include "STATICIMAGEPort.h"
+#include "ANIMATIONPort.h"
 
 __attribute__((weak)) uint64_t getEpochTimestampInUs(void)
 {
