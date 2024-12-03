@@ -193,9 +193,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
 
     size_t frameSize = imageHandle->buffer_size;
 
-    // increment frame index
-    imageHandle->frameIndex = ++imageHandle->frameIndex % (imageHandle->frameIndexEnd + 1);
-    LOG_DBG("Frame index: %d with size: %d", imageHandle->frameIndex, frameSize);
+    LOG_DBG("Frame index: %d with size: %d - %p %p", imageHandle->frameIndex, frameSize, imageHandle->buffer, pFrameDataBuffer);
 
     *pTimestamp = getEpochTimestampInUs();
     *pFrameSize = frameSize;
@@ -204,6 +202,10 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     // TODO check available buffer size relative to frame size
     memcpy(pFrameDataBuffer, imageHandle->buffer, frameSize); // TODO if out of RAM, do a shallow copy
 
+    // increment frame index
+    imageHandle->frameIndex++;
+    imageHandle->frameIndex %= (imageHandle->frameIndexEnd + 1);
+    
     usleep(FRAME_ANIMATION_DURATION_US_H264);
 
     return ret;
