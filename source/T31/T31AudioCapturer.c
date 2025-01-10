@@ -73,7 +73,7 @@ AudioCapturerHandle audioCapturerCreate(void)
     return (AudioCapturerHandle) t31Handle;
 }
 
-AudioCapturerStatus audioCapturerGetStatus(const AudioCapturerHandle handle)
+AudioCapturerStatus audioCapturerGetStatus(const AudioCapturerHandle const handle)
 {
     if (!handle) {
         return AUD_CAP_STATUS_NOT_READY;
@@ -83,7 +83,7 @@ AudioCapturerStatus audioCapturerGetStatus(const AudioCapturerHandle handle)
     return t31Handle->status;
 }
 
-int audioCapturerGetCapability(const AudioCapturerHandle handle, AudioCapability* pCapability)
+int audioCapturerGetCapability(const AudioCapturerHandle const handle, AudioCapability* pCapability)
 {
     T31_HANDLE_NULL_CHECK(handle);
     T31_HANDLE_GET(handle);
@@ -187,7 +187,7 @@ int audioCapturerSetFormat(AudioCapturerHandle handle, const AudioFormat format,
     return 0;
 }
 
-int audioCapturerGetFormat(const AudioCapturerHandle handle, AudioFormat* pFormat, AudioChannel* pChannel, AudioSampleRate* pSampleRate,
+int audioCapturerGetFormat(const AudioCapturerHandle const handle, AudioFormat* pFormat, AudioChannel* pChannel, AudioSampleRate* pSampleRate,
                            AudioBitDepth* pBitDepth)
 {
     T31_HANDLE_NULL_CHECK(handle);
@@ -277,7 +277,7 @@ int audioCapturerGetFrame(AudioCapturerHandle handle, void* pFrameDataBuffer, co
             ret = -EAGAIN;
         } else if (IMP_AENC_GetStream(T31_MIC_ENC_CHN_ID, &encodeStream, BLOCK)) {
             LOG("IMP_AENC_GetStream failed");
-            ret = - EAGAIN;
+            ret - EAGAIN;
         } else if (frameDataBufferSize < encodeStream.len) {
             LOG("FrameDataBufferSize(%d) < frameSize(%d), frame dropped", frameDataBufferSize, encodeStream.len);
             *pFrameSize = 0;
@@ -320,7 +320,7 @@ int audioCapturerReleaseStream(AudioCapturerHandle handle)
     return setStatus(handle, AUD_CAP_STATUS_STREAM_OFF);
 }
 
-void audioCapturerDestroy(AudioCapturerHandle handle)
+void audioCapturerDestory(AudioCapturerHandle handle)
 {
     if (!handle) {
         return;

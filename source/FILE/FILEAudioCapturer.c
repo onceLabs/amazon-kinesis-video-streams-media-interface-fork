@@ -229,7 +229,7 @@ int audioCapturerGetFrame(AudioCapturerHandle handle, void* pFrameDataBuffer, co
                 *pFrameSize = fread(pFrameDataBuffer, 1, frameSize, fileHandle->frameFile);
                 *pTimestamp = getEpochTimestampInUs();
             } else {
-                LOG("FrameDataBufferSize(%ld) < frameSize(%ld), frame dropped", frameDataBufferSize, frameSize);
+                //LOG("FrameDataBufferSize(%ld) < frameSize(%ld), frame dropped", frameDataBufferSize, frameSize);
                 *pFrameSize = 0;
                 ret = -ENOMEM;
             }
@@ -262,7 +262,7 @@ int audioCapturerReleaseStream(AudioCapturerHandle handle)
     return setStatus(handle, AUD_CAP_STATUS_STREAM_OFF);
 }
 
-void audioCapturerDestroy(AudioCapturerHandle handle)
+void audioCapturerDestory(AudioCapturerHandle handle)
 {
     if (!handle) {
         return;

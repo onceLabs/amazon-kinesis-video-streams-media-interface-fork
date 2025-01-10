@@ -188,7 +188,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
                 *pFrameSize = fread(pFrameDataBuffer, 1, frameSize, fileHandle->frameFile);
                 *pTimestamp = getEpochTimestampInUs();
             } else {
-                LOG("FrameDataBufferSize(%ld) < frameSize(%ld), frame dropped", frameDataBufferSize, frameSize);
+                //LOG("FrameDataBufferSize(%ld) < frameSize(%ld), frame dropped", frameDataBufferSize, frameSize);
                 *pFrameSize = 0;
                 ret = -ENOMEM;
             }
@@ -221,7 +221,7 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
 }
 
-void videoCapturerDestroy(VideoCapturerHandle handle)
+void videoCapturerDestory(VideoCapturerHandle handle)
 {
     if (!handle) {
         return;

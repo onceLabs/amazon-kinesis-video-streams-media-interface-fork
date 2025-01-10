@@ -70,6 +70,6 @@ int audioPlayerReleaseStream(AudioPlayerHandle handle)
     return -EAGAIN;
 }
 
-void audioPlayerDestroy(AudioPlayerHandle handle)
+void audioPlayerDestory(AudioPlayerHandle handle)
 {
 }
