@@ -25,7 +25,7 @@
 #include <zephyr/logging/log.h>
 
 // image source
-#include "animation.h"
+#include "animation2.h"
 
 LOG_MODULE_REGISTER(animationVideoCapturer, LOG_LEVEL_DBG);
 
