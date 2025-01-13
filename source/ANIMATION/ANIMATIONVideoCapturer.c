@@ -25,14 +25,14 @@
 #include <zephyr/logging/log.h>
 
 // image source
-#include "animation2.h"
+#include "animationfromcamera.h"
 
 LOG_MODULE_REGISTER(animationVideoCapturer, LOG_LEVEL_DBG);
 
 // #define FRAME_ANIMATION_POSTFIX_H264     ".h264"
 // #define FRAME_ANIMATION_START_INDEX_H264 (1)
 #define FRAME_ANIMATION_START_INDEX_H264 (0)
-#define FRAME_ANIMATION_END_INDEX_H264   (4)
+#define FRAME_ANIMATION_END_INDEX_H264   (10)
 // #define FRAME_ANIMATION_END_INDEX_H264   (240)
 // #define FRAME_ANIMATION_PATH_FORMAT_H264 FRAME_ANIMATION_PATH_PREFIX "h264/frame-%03d" FRAME_ANIMATION_POSTFIX_H264
 // #define FRAME_ANIMATION_DURATION_US_H264 (1000 * 1000 / 25UL)
@@ -82,7 +82,7 @@ VideoCapturerHandle videoCapturerCreate(void)
 
     // Now we have sample frames for H.264, 1080p
     imageHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
-    imageHandle->capability.resolutions = (1 << (VID_RES_1080P - 1));
+    imageHandle->capability.resolutions = (1 << (VID_RES_480P - 1));
 
     imageHandle->buffer = animation_frames[imageHandle->frameIndex];
     imageHandle->buffer_size = animation_frame_sizes[imageHandle->frameIndex];
