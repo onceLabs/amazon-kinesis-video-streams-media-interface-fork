@@ -32,7 +32,7 @@ LOG_MODULE_REGISTER(animationVideoCapturer, LOG_LEVEL_DBG);
 // #define FRAME_ANIMATION_POSTFIX_H264     ".h264"
 // #define FRAME_ANIMATION_START_INDEX_H264 (1)
 #define FRAME_ANIMATION_START_INDEX_H264 (0)
-#define FRAME_ANIMATION_END_INDEX_H264   (10)
+#define FRAME_ANIMATION_END_INDEX_H264   (NUM_ANIMATION_FRAMES)
 // #define FRAME_ANIMATION_END_INDEX_H264   (240)
 // #define FRAME_ANIMATION_PATH_FORMAT_H264 FRAME_ANIMATION_PATH_PREFIX "h264/frame-%03d" FRAME_ANIMATION_POSTFIX_H264
 // #define FRAME_ANIMATION_DURATION_US_H264 (1000 * 1000 / 25UL)
@@ -201,6 +201,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     // read image
     // TODO check available buffer size relative to frame size
     memcpy(pFrameDataBuffer, imageHandle->buffer, frameSize); // TODO if out of RAM, do a shallow copy
+    LOG_HEXDUMP_DBG(pFrameDataBuffer+frameSize-30, 21, "Frame data");
 
     // increment frame index
     imageHandle->frameIndex++;
