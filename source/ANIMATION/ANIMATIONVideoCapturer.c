@@ -201,7 +201,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     // read image
     // TODO check available buffer size relative to frame size
     memcpy(pFrameDataBuffer, imageHandle->buffer, frameSize); // TODO if out of RAM, do a shallow copy
-    LOG_HEXDUMP_DBG(pFrameDataBuffer+frameSize-30, 21, "Frame data");
+    // LOG_HEXDUMP_DBG(pFrameDataBuffer+frameSize-30, 20, "Frame data");
 
     // increment frame index
     imageHandle->frameIndex++;
