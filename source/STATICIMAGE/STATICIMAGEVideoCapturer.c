@@ -22,7 +22,7 @@
 #include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
 
 // image source
-#include "keyframe.h"
+#include "keyframefromcamera.h"
 
 // #define FRAME_STATICIMAGE_POSTFIX_H264     ".h264"
 // #define FRAME_STATICIMAGE_START_INDEX_H264 (1)
@@ -79,8 +79,8 @@ VideoCapturerHandle videoCapturerCreate(void)
     imageHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
     imageHandle->capability.resolutions = (1 << (VID_RES_1080P - 1));
 
-    imageHandle->buffer = frame_001_h264;
-    imageHandle->buffer_size = sizeof(frame_001_h264);
+    imageHandle->buffer = frame_31_h264;
+    imageHandle->buffer_size = sizeof(frame_31_h264);
 
 
     setStatus((VideoCapturerHandle) imageHandle, VID_CAP_STATUS_STREAM_OFF);
