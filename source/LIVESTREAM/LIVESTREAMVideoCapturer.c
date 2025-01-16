@@ -164,6 +164,7 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
 
     // send start sending command
     add_data_to_usb(USB_START_COMMAND);
+    k_sleep(K_MSEC(40));
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_ON);
 }
@@ -176,9 +177,9 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
 
     LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
 
-    if (!pFrameDataBuffer || !pTimestamp || !pFrameSize) {
-        return -EINVAL;
-    }
+    // if (!pFrameDataBuffer || !pTimestamp || !pFrameSize) {
+    //     return -EINVAL;
+    // }
 
     int ret = 0;
 
