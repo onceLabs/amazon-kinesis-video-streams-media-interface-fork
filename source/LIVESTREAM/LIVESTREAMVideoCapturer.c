@@ -17,43 +17,40 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "STATICIMAGECommon.h"
-#include "STATICIMAGEPort.h"
+#include "LIVESTREAMCommon.h"
+#include "LIVESTREAMPort.h"
 #include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
 
-// image source
-#include "keyframefromcamera.h"
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
-// #define FRAME_STATICIMAGE_POSTFIX_H264     ".h264"
-// #define FRAME_STATICIMAGE_START_INDEX_H264 (1)
-#define FRAME_STATICIMAGE_START_INDEX_H264 (0)
-#define FRAME_STATICIMAGE_END_INDEX_H264   (1)
-// #define FRAME_STATICIMAGE_END_INDEX_H264   (240)
-// #define FRAME_STATICIMAGE_PATH_FORMAT_H264 FRAME_STATICIMAGE_PATH_PREFIX "h264/frame-%03d" FRAME_STATICIMAGE_POSTFIX_H264
-// #define FRAME_STATICIMAGE_DURATION_US_H264 (1000 * 1000 / 25UL)
 
-#define STATICIMAGE_HANDLE_GET(x) STATICIMAGEVideoCapturer* imageHandle = (STATICIMAGEVideoCapturer*) ((x))
+#include "usbforwardertypes.h"
+#include "usbcdcacm.h"
 
-#define FRAME_STATICIMAGE_DURATION_US_H264 (1000 * 1000 / 25UL)
+
+LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_DBG);
+
+#define LIVESTREAM_HANDLE_GET(x) LIVESTREAMVideoCapturer* imageHandle = (LIVESTREAMVideoCapturer*) ((x))
+
+#define EXTRA_AVCC_SPACE 50 
+
+
+extern struct k_fifo usbforwarder;
 
 typedef struct {
     VideoCapturerStatus status;
     VideoCapability capability;
     VideoFormat format;
     VideoResolution resolution;
-    // char* framePathFormat;
-    size_t frameIndex;
-    size_t frameIndexStart;     // for animation
-    size_t frameIndexEnd;       // for animation
-    // STATICIMAGE* frameFile;
     char *buffer;
     size_t buffer_size;
-} STATICIMAGEVideoCapturer;
+} LIVESTREAMVideoCapturer;
 
 static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newStatus)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_NULL_CHECK(handle);
+    LIVESTREAM_HANDLE_GET(handle);
 
     if (newStatus != imageHandle->status) {
         imageHandle->status = newStatus;
@@ -65,22 +62,19 @@ static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newSt
 
 VideoCapturerHandle videoCapturerCreate(void)
 {
-    STATICIMAGEVideoCapturer* imageHandle = NULL;
+    LIVESTREAMVideoCapturer* imageHandle = NULL;
 
 
-    if (!(imageHandle = (STATICIMAGEVideoCapturer*) malloc(sizeof(STATICIMAGEVideoCapturer)))) {
+    if (!(imageHandle = (LIVESTREAMVideoCapturer*) malloc(sizeof(LIVESTREAMVideoCapturer)))) {
         LOG("OOM");
         return NULL;
     }
 
-    memset(imageHandle, 0, sizeof(STATICIMAGEVideoCapturer));
+    memset(imageHandle, 0, sizeof(LIVESTREAMVideoCapturer));
 
     // Now we have sample frames for H.264, 1080p
     imageHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
-    imageHandle->capability.resolutions = (1 << (VID_RES_1080P - 1));
-
-    imageHandle->buffer = frame_31_h264;
-    imageHandle->buffer_size = sizeof(frame_31_h264);
+    imageHandle->capability.resolutions = (1 << (VID_RES_480P - 1));
 
 
     setStatus((VideoCapturerHandle) imageHandle, VID_CAP_STATUS_STREAM_OFF);
@@ -94,14 +88,14 @@ VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
         return VID_CAP_STATUS_NOT_READY;
     }
 
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_GET(handle);
     return imageHandle->status;
 }
 
 int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability* pCapability)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_NULL_CHECK(handle);
+    LIVESTREAM_HANDLE_GET(handle);
 
     if (!pCapability) {
         return -EAGAIN;
@@ -114,15 +108,14 @@ int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability
 
 int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format, const VideoResolution resolution)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_NULL_CHECK(handle);
+    LIVESTREAM_HANDLE_GET(handle);
 
-    STATICIMAGE_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_OFF);
+    LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_OFF);
 
     switch (format) {
         case VID_FMT_H264:
-            imageHandle->frameIndexStart = FRAME_STATICIMAGE_START_INDEX_H264;
-            imageHandle->frameIndexEnd = FRAME_STATICIMAGE_END_INDEX_H264;
+            LOG_INF("Setting format to H264");
             break;
 
         default:
@@ -132,6 +125,12 @@ int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format,
 
     switch (resolution) {
         case VID_RES_1080P:
+            break;
+
+        case VID_RES_720P:
+            break;
+
+        case VID_RES_480P:
             break;
 
         default:
@@ -147,8 +146,8 @@ int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format,
 
 int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pFormat, VideoResolution* pResolution)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_NULL_CHECK(handle);
+    LIVESTREAM_HANDLE_GET(handle);
 
     *pFormat = imageHandle->format;
     *pResolution = imageHandle->resolution;
@@ -158,12 +157,13 @@ int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pForma
 
 int videoCapturerAcquireStream(VideoCapturerHandle handle)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_NULL_CHECK(handle);
+    LIVESTREAM_HANDLE_GET(handle);
 
-    LOG("Acquiring stream");
+    LOG_DBG("Acquiring stream");
 
-    imageHandle->frameIndex = imageHandle->frameIndexStart;
+    // send start sending command
+    add_data_to_usb(USB_START_COMMAND);
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_ON);
 }
@@ -171,10 +171,10 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
 int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, const size_t frameDataBufferSize, uint64_t* pTimestamp,
                           size_t* pFrameSize)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_NULL_CHECK(handle);
+    LIVESTREAM_HANDLE_GET(handle);
 
-    STATICIMAGE_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
+    LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
 
     if (!pFrameDataBuffer || !pTimestamp || !pFrameSize) {
         return -EINVAL;
@@ -182,29 +182,46 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
 
     int ret = 0;
 
+    struct data_item_var_t *new_item = k_fifo_get(&usbforwarder, K_FOREVER);
+    if (new_item == NULL) {
+        LOG_ERR("Failed to get item from USB Forwarder");
+        return -ENOENT;
+    }
+
+
+    LOG_INF("Received data from USB Forwarder of length: %d", new_item->len);
+
+    pFrameDataBuffer = k_malloc(new_item->len + EXTRA_AVCC_SPACE);
+    if (!pFrameDataBuffer) {
+        LOG_ERR("Failed to allocate memory for frame data");
+        return -ENOMEM;
+    }
+    memcpy(pFrameDataBuffer, new_item->data, new_item->len);
+
+    // LOG_HEXDUMP_INF(new_item->data, new_item->len, "Data");
+    k_free(new_item->data); // this is done by getFrame?
+    k_free(new_item);
+
     size_t frameSize = imageHandle->buffer_size;
 
-    // increment frame index
-    imageHandle->frameIndex = imageHandle->frameIndex++ % imageHandle->frameIndexEnd;
-
     *pTimestamp = getEpochTimestampInUs();
-    *pFrameSize = frameSize;
+    *pFrameSize = new_item->len;
 
-    // read image
-    // TODO check available buffer size relative to frame size
-    memcpy(pFrameDataBuffer, imageHandle->buffer, frameSize); // TODO if out of RAM, do a shallow copy
-
-    usleep(FRAME_STATICIMAGE_DURATION_US_H264);
+    // pFrameDataBuffer = new_item->data;
 
     return ret;
 }
 
 int videoCapturerReleaseStream(VideoCapturerHandle handle)
 {
-    STATICIMAGE_HANDLE_NULL_CHECK(handle);
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_NULL_CHECK(handle);
+    LIVESTREAM_HANDLE_GET(handle);
 
-    STATICIMAGE_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
+    LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
+    LOG_DBG("Releasing stream");
+
+    // send stop sending command
+    add_data_to_usb(USB_STOP_COMMAND);
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
 }
@@ -215,7 +232,7 @@ void videoCapturerDestory(VideoCapturerHandle handle)
         return;
     }
 
-    STATICIMAGE_HANDLE_GET(handle);
+    LIVESTREAM_HANDLE_GET(handle);
 
     if (imageHandle->status == VID_CAP_STATUS_STREAM_ON) {
         videoCapturerReleaseStream(handle);
