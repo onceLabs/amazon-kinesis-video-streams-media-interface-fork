@@ -19,11 +19,10 @@
 
 #include "LIVESTREAMCommon.h"
 #include "LIVESTREAMPort.h"
-#include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
+#include "com/amazonaws/kinesis/video/capturer/VideoCapturerLIVESTREAM.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-
 
 #include "usbforwardertypes.h"
 #include "usbcdcacm.h"
@@ -33,8 +32,7 @@ LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_DBG);
 
 #define LIVESTREAM_HANDLE_GET(x) LIVESTREAMVideoCapturer* imageHandle = (LIVESTREAMVideoCapturer*) ((x))
 
-#define EXTRA_AVCC_SPACE 50 
-
+#define EXTRA_AVCC_SPACE 50  // TODO task/BNCC-204
 
 extern struct k_fifo usbforwarder;
 
@@ -164,11 +162,12 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
 
     // send start sending command
     add_data_to_usb(USB_START_COMMAND);
+    k_sleep(K_MSEC(40)); // TODO check for event or determine better magic number
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_ON);
 }
 
-int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, const size_t frameDataBufferSize, uint64_t* pTimestamp,
+int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, const size_t frameDataBufferSize, uint64_t* pTimestamp,
                           size_t* pFrameSize)
 {
     LIVESTREAM_HANDLE_NULL_CHECK(handle);
@@ -177,6 +176,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
 
     if (!pFrameDataBuffer || !pTimestamp || !pFrameSize) {
+        LOG_ERR("Invalid argument - found NULL pointer");
         return -EINVAL;
     }
 
@@ -189,25 +189,14 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void* pFrameDataBuffer, co
     }
 
 
-    LOG_INF("Received data from USB Forwarder of length: %d", new_item->len);
+    LOG_DBG("Received data from USB Forwarder of length: %d", new_item->len);
 
-    pFrameDataBuffer = k_malloc(new_item->len + EXTRA_AVCC_SPACE);
-    if (!pFrameDataBuffer) {
-        LOG_ERR("Failed to allocate memory for frame data");
-        return -ENOMEM;
-    }
-    memcpy(pFrameDataBuffer, new_item->data, new_item->len);
-
-    // LOG_HEXDUMP_INF(new_item->data, new_item->len, "Data");
-    k_free(new_item->data); // this is done by getFrame?
-    k_free(new_item);
-
-    size_t frameSize = imageHandle->buffer_size;
+    *pFrameDataBuffer = new_item->data;
 
     *pTimestamp = getEpochTimestampInUs();
     *pFrameSize = new_item->len;
 
-    // pFrameDataBuffer = new_item->data;
+    k_free(new_item);
 
     return ret;
 }

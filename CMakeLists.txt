@@ -65,6 +65,7 @@ set(INCS
     ${INCS_DIR}/com/amazonaws/kinesis/video/capability/AudioCapability.h
     ${INCS_DIR}/com/amazonaws/kinesis/video/capability/VideoCapability.h
     ${INCS_DIR}/com/amazonaws/kinesis/video/capturer/VideoCapturer.h
+    ${INCS_DIR}/com/amazonaws/kinesis/video/capturer/VideoCapturerLIVESTREAM.h
     ${INCS_DIR}/com/amazonaws/kinesis/video/capturer/AudioCapturer.h
     ${INCS_DIR}/com/amazonaws/kinesis/video/player/AudioPlayer.h
     ${ROOT_BUILD_DIR}/zephyr/include/generated/autoconf.h
