@@ -36,6 +36,8 @@ LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_DBG);
 
 extern struct k_fifo usbforwarder;
 
+static uint64_t current_timestamp = 0;
+
 typedef struct {
     VideoCapturerStatus status;
     VideoCapability capability;
@@ -164,6 +166,8 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     add_data_to_usb(USB_START_COMMAND);
     k_sleep(K_MSEC(40)); // TODO check for event or determine better magic number
 
+    current_timestamp = getEpochTimestampInUs();
+
     return setStatus(handle, VID_CAP_STATUS_STREAM_ON);
 }
 
@@ -193,8 +197,11 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, c
 
     *pFrameDataBuffer = new_item->data;
 
-    *pTimestamp = getEpochTimestampInUs();
+    // *pTimestamp = getEpochTimestampInUs();
+    *pTimestamp = current_timestamp;
     *pFrameSize = new_item->len;
+
+    current_timestamp += 1000000 / 30; // 30 fps
 
     k_free(new_item);
 
