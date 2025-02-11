@@ -198,6 +198,8 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, c
 
     k_free(new_item);
 
+    add_data_to_usb("nextnext"); // useless character for some reason that's useful // TODO figure this out correctly
+
     return ret;
 }
 
