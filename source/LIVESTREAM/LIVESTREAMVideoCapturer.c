@@ -25,7 +25,7 @@
 #include <zephyr/logging/log.h>
 
 #include "usbforwardertypes.h"
-#include "usbcdcacm.h"
+#include "usb_forwarder_sink.h"
 
 
 LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_DBG);
