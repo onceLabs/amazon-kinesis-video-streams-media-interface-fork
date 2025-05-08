@@ -25,10 +25,10 @@
 #include <zephyr/logging/log.h>
 
 #include "usbforwardertypes.h"
-#include "usbcdcacm.h"
+#include "usb_forwarder_sink.h"
 
 
-LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_WRN);
 
 #define LIVESTREAM_HANDLE_GET(x) LIVESTREAMVideoCapturer* imageHandle = (LIVESTREAMVideoCapturer*) ((x))
 
@@ -186,7 +186,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, c
 
     int ret = 0;
 
-    struct data_item_var_t *new_item = k_fifo_get(&usbforwarder, K_FOREVER);
+    struct data_item_var_t *new_item = k_fifo_get(&usbforwarder, K_MSEC(1200)); // TODO determine worst case in the field
     if (new_item == NULL) {
         LOG_ERR("Failed to get item from USB Forwarder");
         return -ENOENT;
@@ -220,6 +220,7 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
 
     // send stop sending command
     add_data_to_usb(USB_STOP_COMMAND);
+    usbf_shutdown_and_reset();
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
 }
