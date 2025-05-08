@@ -56,6 +56,8 @@ endif()
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/${BOARD}.cmake)
 # Board Specific Parts End
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../../theiacommon/include)
+
 option(BUILD_WEBRTC_SAMPLES "Build webrtc samples" OFF)
 option(BUILD_KVS_SAMPLES "Build KVS Producer samples" OFF)
 option(BUILD_SAVE_FRAME_SAMPLES "Build save frame samples" OFF)
