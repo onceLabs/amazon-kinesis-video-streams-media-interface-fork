@@ -201,7 +201,7 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, c
     *pTimestamp = current_timestamp;
     *pFrameSize = new_item->len;
 
-    current_timestamp += 1000000 / 30; // 30 fps
+    current_timestamp += 1000000 / 15; // 15 fps
 
     k_free(new_item);
 
