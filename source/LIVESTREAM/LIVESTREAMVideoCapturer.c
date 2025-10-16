@@ -163,7 +163,14 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     LOG_DBG("Acquiring stream");
 
     // send start sending command
-    add_data_to_usb(USB_START_COMMAND);
+    usb_data_item cmd = {0};
+    memcpy(cmd.preamble, PREAMBLE_BYTES, sizeof(PREAMBLE_BYTES));
+    cmd.id = 0;
+    cmd.type = USBF_PACKET_TYPE_ID_FRAME_MGMT;
+    cmd.subtype.fm_subtype = USBF_PACKET_SUBTYPE_ID_FRAME_MGMT_CTRL;
+    cmd.data.fm_ctrl.request_id = 0;
+    cmd.data.fm_ctrl.action = USBF_FM_ACTION_START;
+    add_data_to_usb(&cmd);
     k_sleep(K_MSEC(40)); // TODO check for event or determine better magic number
 
     current_timestamp = getEpochTimestampInUs();
@@ -201,11 +208,22 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, c
     *pTimestamp = current_timestamp;
     *pFrameSize = new_item->len;
 
+<<<<<<< HEAD
     current_timestamp += 1000000 / 15; // 15 fps
+=======
+    current_timestamp += 1000000 / 18; // 18 fps
+>>>>>>> main
 
     k_free(new_item);
 
-    add_data_to_usb("nextnext"); // useless character for some reason that's useful // TODO figure this out correctly
+    usb_data_item dummy = {0};
+    memcpy(dummy.preamble, PREAMBLE_BYTES, sizeof(PREAMBLE_BYTES));
+    dummy.id = 0;
+    dummy.type = USBF_PACKET_TYPE_ID_FRAME_MGMT;
+    dummy.subtype.fm_subtype = USBF_PACKET_SUBTYPE_ID_FRAME_MGMT_CTRL;
+    dummy.data.fm_ctrl.request_id = 0;
+    dummy.data.fm_ctrl.action = USBF_FM_ACTION_DUMMY;
+    add_data_to_usb(&dummy); // useless tx for some reason that's useful // TODO figure this out correctly
 
     return ret;
 }
@@ -219,7 +237,14 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
     LOG_DBG("Releasing stream");
 
     // send stop sending command
-    add_data_to_usb(USB_STOP_COMMAND);
+    usb_data_item cmd = {0};
+    memcpy(cmd.preamble, PREAMBLE_BYTES, sizeof(PREAMBLE_BYTES));
+    cmd.id = 0;
+    cmd.type = USBF_PACKET_TYPE_ID_FRAME_MGMT;
+    cmd.subtype.fm_subtype = USBF_PACKET_SUBTYPE_ID_FRAME_MGMT_CTRL;
+    cmd.data.fm_ctrl.request_id = 0;
+    cmd.data.fm_ctrl.action = USBF_FM_ACTION_STOP;
+    add_data_to_usb(&cmd);
     usbf_shutdown_and_reset();
 
     return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
