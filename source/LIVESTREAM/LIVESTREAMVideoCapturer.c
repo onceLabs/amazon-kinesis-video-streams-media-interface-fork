@@ -205,10 +205,8 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, c
     *pFrameDataBuffer = new_item->data;
 
     // *pTimestamp = getEpochTimestampInUs();
-    *pTimestamp = current_timestamp;
+    *pTimestamp = current_timestamp + (new_item->timestamp * USEC_PER_MSEC); // TODO correct timestamping
     *pFrameSize = new_item->len;
-
-    current_timestamp += 1000000 / 30; // 30 fps
 
     k_free(new_item);
 
