@@ -37,6 +37,7 @@ LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_WRN);
 extern struct k_fifo usbforwarder;
 
 static uint64_t current_timestamp = 0;
+static uint64_t current_peer_timestamp = 0;
 
 typedef struct {
     VideoCapturerStatus status;
@@ -173,8 +174,6 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     add_data_to_usb(&cmd);
     k_sleep(K_MSEC(40)); // TODO check for event or determine better magic number
 
-    current_timestamp = getEpochTimestampInUs();
-
     return setStatus(handle, VID_CAP_STATUS_STREAM_ON);
 }
 
@@ -205,7 +204,15 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, c
     *pFrameDataBuffer = new_item->data;
 
     // *pTimestamp = getEpochTimestampInUs();
-    *pTimestamp = current_timestamp + (new_item->timestamp * USEC_PER_MSEC); // TODO correct timestamping
+
+    if (current_timestamp == 0) {
+        current_timestamp = getEpochTimestampInUs();
+    }
+    if (current_peer_timestamp == 0) {
+        current_peer_timestamp = new_item->timestamp;
+    }
+
+    *pTimestamp = current_timestamp + ((new_item->timestamp - current_peer_timestamp) * USEC_PER_MSEC);
     *pFrameSize = new_item->len;
 
     k_free(new_item);
@@ -229,6 +236,8 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
 
     LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
     LOG_DBG("Releasing stream");
+
+    current_timestamp = 0;
 
     // send stop sending command
     usb_data_item cmd = {0};
