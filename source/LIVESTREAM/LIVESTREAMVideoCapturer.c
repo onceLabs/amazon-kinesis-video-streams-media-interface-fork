@@ -24,8 +24,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include "usbforwardertypes.h"
-#include "usb_forwarder_sink.h"
+#include <theia/usbforwardertypes.h>
+#include <theia/usb_forwarder_sink.h>
 
 
 LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_WRN);
@@ -206,10 +206,10 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, c
     // *pTimestamp = getEpochTimestampInUs();
 
     if (current_timestamp == 0) {
-        current_timestamp = getEpochTimestampInUs();
+      current_timestamp = getEpochTimestampInUs();
     }
     if (current_peer_timestamp == 0) {
-        current_peer_timestamp = new_item->timestamp;
+      current_peer_timestamp = new_item->timestamp;
     }
 
     *pTimestamp = current_timestamp + ((new_item->timestamp - current_peer_timestamp) * USEC_PER_MSEC);
