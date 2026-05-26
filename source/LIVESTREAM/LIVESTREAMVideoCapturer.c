@@ -1,19 +1,33 @@
-/*
- * Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+/**
+ * @file LIVESTREAMVideoCapturer.c
+ * @brief KVS video capturer backed by the USB forwarder FIFO - RW612 / Zephyr
  *
- * Licensed under the Apache License, Version 2.0 (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ * Implements the VideoCapturerHandle interface used by the KVS embedded
+ * producer SDK.  Frames arrive from the N6 via the USB forwarder FIFO
+ * (populated by usb_forwarder_sink.c) and are handed to the KVS SDK one
+ * at a time via videoCapturerGetFrame().
  *
- *  http://aws.amazon.com/apache2.0
+ * Timestamp strategy
+ * ------------------
+ * The N6 timestamps frames with HAL_GetTick() (ms since N6 boot).  The
+ * RW612 has a wall-clock epoch via SNTP.  On the first frame of each
+ * stream we anchor:
+ *   rw612_epoch_us  = getEpochTimestampInUs()      (RW612 wall clock)
+ *   n6_origin_ms    = new_item->timestamp           (N6 HAL_GetTick)
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ * Subsequent frames:
+ *   timestamp_us = rw612_epoch_us
+ *                + (new_item->timestamp - n6_origin_ms) * USEC_PER_MSEC
+ *
+ * This gives KVS a monotonically increasing timestamp anchored to real
+ * wall time without requiring TIME_SYNC packets.
+ *
+ * @author Andrew Nyland
+ * @date 2025-01-03  original
+ * @date 2026-05-20  rewrite
  */
+
 #include <errno.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -26,246 +40,236 @@
 
 #include <theia/usbforwardertypes.h>
 #include <theia/usb_forwarder_sink.h>
+#include <theiacommon/usb_protocol_cdcacm.h>
 
+LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_DBG);
 
-LOG_MODULE_REGISTER(LIVESTREAMVideoCapturer, LOG_LEVEL_WRN);
+#define LIVESTREAM_HANDLE_GET(x) \
+    LIVESTREAMVideoCapturer *imageHandle = (LIVESTREAMVideoCapturer *)(x)
 
-#define LIVESTREAM_HANDLE_GET(x) LIVESTREAMVideoCapturer* imageHandle = (LIVESTREAMVideoCapturer*) ((x))
-
-#define EXTRA_AVCC_SPACE 50  // TODO task/BNCC-204
+/* Extra bytes allocated for in-place Annex-B -> AVCC conversion.
+ * Must match EXTRA_AVCC_SPACE in usb_forwarder_sink.c               */
+#define EXTRA_AVCC_SPACE  50
 
 extern struct k_fifo usbforwarder;
 
-static uint64_t current_timestamp = 0;
-static uint64_t current_peer_timestamp = 0;
+/* Timestamp anchors — reset each stream in videoCapturerReleaseStream() */
+static uint64_t rw612_epoch_us  = 0;
+static uint32_t n6_origin_ms    = 0;
 
 typedef struct {
-    VideoCapturerStatus status;
-    VideoCapability capability;
-    VideoFormat format;
-    VideoResolution resolution;
-    char *buffer;
-    size_t buffer_size;
+  VideoCapturerStatus status;
+  VideoCapability     capability;
+  VideoFormat         format;
+  VideoResolution     resolution;
 } LIVESTREAMVideoCapturer;
 
-static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newStatus)
+
+/* -----------------------------------------------------------------------
+ * Internal helpers
+ * --------------------------------------------------------------------- */
+static int setStatus(VideoCapturerHandle handle,
+                     const VideoCapturerStatus newStatus)
 {
-    LIVESTREAM_HANDLE_NULL_CHECK(handle);
-    LIVESTREAM_HANDLE_GET(handle);
+  LIVESTREAM_HANDLE_NULL_CHECK(handle);
+  LIVESTREAM_HANDLE_GET(handle);
 
-    if (newStatus != imageHandle->status) {
-        imageHandle->status = newStatus;
-        LOG("VideoCapturer new status[%d]", newStatus);
-    }
-
-    return 0;
+  if (newStatus != imageHandle->status) {
+    imageHandle->status = newStatus;
+    LOG_DBG("VideoCapturer status -> %d", newStatus);
+  }
+  return 0;
 }
+
+
+/* -----------------------------------------------------------------------
+ * Public: VideoCapturerHandle API
+ * --------------------------------------------------------------------- */
 
 VideoCapturerHandle videoCapturerCreate(void)
 {
-    LIVESTREAMVideoCapturer* imageHandle = NULL;
+  LIVESTREAMVideoCapturer *h = malloc(sizeof(LIVESTREAMVideoCapturer));
+  if (h == NULL) {
+    LOG_ERR("OOM allocating capturer handle");
+    return NULL;
+  }
 
+  memset(h, 0, sizeof(*h));
+  h->capability.formats     = (1 << (VID_FMT_H264 - 1));
+  h->capability.resolutions = (1 << (VID_RES_480P - 1));
 
-    if (!(imageHandle = (LIVESTREAMVideoCapturer*) malloc(sizeof(LIVESTREAMVideoCapturer)))) {
-        LOG("OOM");
-        return NULL;
-    }
-
-    memset(imageHandle, 0, sizeof(LIVESTREAMVideoCapturer));
-
-    // Now we have sample frames for H.264, 1080p
-    imageHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
-    imageHandle->capability.resolutions = (1 << (VID_RES_480P - 1));
-
-
-    setStatus((VideoCapturerHandle) imageHandle, VID_CAP_STATUS_STREAM_OFF);
-
-    return (VideoCapturerHandle) imageHandle;
+  setStatus((VideoCapturerHandle)h, VID_CAP_STATUS_STREAM_OFF);
+  return (VideoCapturerHandle)h;
 }
 
 VideoCapturerStatus videoCapturerGetStatus(const VideoCapturerHandle handle)
 {
-    if (!handle) {
-        return VID_CAP_STATUS_NOT_READY;
-    }
-
-    LIVESTREAM_HANDLE_GET(handle);
-    return imageHandle->status;
+  if (!handle) {
+    return VID_CAP_STATUS_NOT_READY;
+  }
+  LIVESTREAM_HANDLE_GET(handle);
+  return imageHandle->status;
 }
 
-int videoCapturerGetCapability(const VideoCapturerHandle handle, VideoCapability* pCapability)
+int videoCapturerGetCapability(const VideoCapturerHandle handle,
+                                VideoCapability *pCapability)
 {
-    LIVESTREAM_HANDLE_NULL_CHECK(handle);
-    LIVESTREAM_HANDLE_GET(handle);
-
-    if (!pCapability) {
-        return -EAGAIN;
-    }
-
-    *pCapability = imageHandle->capability;
-
-    return 0;
+  LIVESTREAM_HANDLE_NULL_CHECK(handle);
+  LIVESTREAM_HANDLE_GET(handle);
+  if (!pCapability) {
+    return -EAGAIN;
+  }
+  *pCapability = imageHandle->capability;
+  return 0;
 }
 
-int videoCapturerSetFormat(VideoCapturerHandle handle, const VideoFormat format, const VideoResolution resolution)
+int videoCapturerSetFormat(VideoCapturerHandle handle,
+                            const VideoFormat format,
+                            const VideoResolution resolution)
 {
-    LIVESTREAM_HANDLE_NULL_CHECK(handle);
-    LIVESTREAM_HANDLE_GET(handle);
+  LIVESTREAM_HANDLE_NULL_CHECK(handle);
+  LIVESTREAM_HANDLE_GET(handle);
+  LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_OFF);
 
-    LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_OFF);
+  switch (format) {
+    case VID_FMT_H264:
+      break;
+    default:
+      LOG_ERR("Unsupported format %d", format);
+      return -EINVAL;
+  }
 
-    switch (format) {
-        case VID_FMT_H264:
-            LOG_INF("Setting format to H264");
-            break;
+  switch (resolution) {
+    case VID_RES_1080P:
+    case VID_RES_720P:
+    case VID_RES_480P:
+      break;
+    default:
+      LOG_ERR("Unsupported resolution %d", resolution);
+      return -EINVAL;
+  }
 
-        default:
-            LOG("Unsupported format %d", format);
-            return -EINVAL;
-    }
-
-    switch (resolution) {
-        case VID_RES_1080P:
-            break;
-
-        case VID_RES_720P:
-            break;
-
-        case VID_RES_480P:
-            break;
-
-        default:
-            LOG("Unsupported resolution %d", resolution);
-            return -EINVAL;
-    }
-
-    imageHandle->format = format;
-    imageHandle->resolution = resolution;
-
-    return 0;
+  imageHandle->format     = format;
+  imageHandle->resolution = resolution;
+  return 0;
 }
 
-int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat* pFormat, VideoResolution* pResolution)
+int videoCapturerGetFormat(const VideoCapturerHandle handle,
+                            VideoFormat *pFormat,
+                            VideoResolution *pResolution)
 {
-    LIVESTREAM_HANDLE_NULL_CHECK(handle);
-    LIVESTREAM_HANDLE_GET(handle);
-
-    *pFormat = imageHandle->format;
-    *pResolution = imageHandle->resolution;
-
-    return 0;
+  LIVESTREAM_HANDLE_NULL_CHECK(handle);
+  LIVESTREAM_HANDLE_GET(handle);
+  *pFormat     = imageHandle->format;
+  *pResolution = imageHandle->resolution;
+  return 0;
 }
 
 int videoCapturerAcquireStream(VideoCapturerHandle handle)
 {
-    LIVESTREAM_HANDLE_NULL_CHECK(handle);
-    LIVESTREAM_HANDLE_GET(handle);
+  LIVESTREAM_HANDLE_NULL_CHECK(handle);
+  LIVESTREAM_HANDLE_GET(handle);
 
-    LOG_DBG("Acquiring stream");
+  LOG_DBG("Acquiring stream");
 
-    // send start sending command
-    usb_data_item cmd = {0};
-    memcpy(cmd.preamble, PREAMBLE_BYTES, sizeof(PREAMBLE_BYTES));
-    cmd.id = 0;
-    cmd.type = USBF_PACKET_TYPE_ID_FRAME_MGMT;
-    cmd.subtype.fm_subtype = USBF_PACKET_SUBTYPE_ID_FRAME_MGMT_CTRL;
-    cmd.data.fm_ctrl.request_id = 0;
-    cmd.data.fm_ctrl.action = USBF_FM_ACTION_START;
-    add_data_to_usb(&cmd);
-    k_sleep(K_MSEC(40)); // TODO check for event or determine better magic number
+  /* Reset timestamp anchors for this stream session */
+  rw612_epoch_us = 0;
+  n6_origin_ms   = 0;
 
-    return setStatus(handle, VID_CAP_STATUS_STREAM_ON);
+  /* Don't reset here — N6 should already be stopped from
+   * videoCapturerReleaseStream. Just send START and force a keyframe. */
+  usb_fm_send_ctrl(0, USBF_FM_ACTION_START);
+  k_sleep(K_MSEC(10));
+  usb_fm_send_ctrl(0, USBF_FM_ACTION_IFRAME);
+  k_sleep(K_MSEC(40));
+
+  /* Give the N6 time to start the encoder before we expect frames.
+   * 40 ms covers one frame interval at 25 fps. */
+  k_sleep(K_MSEC(40));
+
+  return setStatus(handle, VID_CAP_STATUS_STREAM_ON);
 }
 
-int videoCapturerGetFrame(VideoCapturerHandle handle, void** pFrameDataBuffer, const size_t frameDataBufferSize, uint64_t* pTimestamp,
-                          size_t* pFrameSize)
+/**
+ * @brief Block until a frame is available and return it to the KVS SDK.
+ *
+ * The KVS SDK owns *pFrameDataBuffer after this returns and will free it
+ * (or the buffer may be reused — depends on SDK version).  We allocate
+ * via k_malloc in rx_work_handler; the SDK must not call free() directly.
+ * Confirm with the KVS embedded SDK's memory contract if this changes.
+ */
+int videoCapturerGetFrame(VideoCapturerHandle handle,
+                           void **pFrameDataBuffer,
+                           const size_t frameDataBufferSize,
+                           uint64_t *pTimestamp,
+                           size_t *pFrameSize)
 {
-    LIVESTREAM_HANDLE_NULL_CHECK(handle);
-    LIVESTREAM_HANDLE_GET(handle);
+  LIVESTREAM_HANDLE_NULL_CHECK(handle);
+  LIVESTREAM_HANDLE_GET(handle);
+  LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
 
-    LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
+  if (!pFrameDataBuffer || !pTimestamp || !pFrameSize) {
+    LOG_ERR("NULL argument");
+    return -EINVAL;
+  }
 
-    if (!pFrameDataBuffer || !pTimestamp || !pFrameSize) {
-        LOG_ERR("Invalid argument - found NULL pointer");
-        return -EINVAL;
-    }
+  struct data_item_var_t *item = k_fifo_get(&usbforwarder, K_MSEC(1200));
+  if (item == NULL) {
+    LOG_ERR("FIFO timeout — no frame from USB forwarder");
+    return -ENOENT;
+  }
 
-    int ret = 0;
+  LOG_DBG("Frame received: len=%d ts=%u", item->len, item->timestamp);
 
-    struct data_item_var_t *new_item = k_fifo_get(&usbforwarder, K_MSEC(1200)); // TODO determine worst case in the field
-    if (new_item == NULL) {
-        LOG_ERR("Failed to get item from USB Forwarder");
-        return -ENOENT;
-    }
+  /* Anchor timestamps on the first frame of this stream */
+  if (rw612_epoch_us == 0) {
+    rw612_epoch_us = getEpochTimestampInUs();
+    n6_origin_ms   = item->timestamp;
+  }
 
+  *pFrameDataBuffer = item->data;
+  *pFrameSize       = item->len;
+  *pTimestamp       = rw612_epoch_us
+                      + ((uint64_t)(item->timestamp - n6_origin_ms)
+                         * USEC_PER_MSEC);
 
-    LOG_DBG("Received data from USB Forwarder of length: %d", new_item->len);
+  k_free(item);  /* free the FIFO wrapper; caller owns item->data */
 
-    *pFrameDataBuffer = new_item->data;
-
-    // *pTimestamp = getEpochTimestampInUs();
-
-    if (current_timestamp == 0) {
-      current_timestamp = getEpochTimestampInUs();
-    }
-    if (current_peer_timestamp == 0) {
-      current_peer_timestamp = new_item->timestamp;
-    }
-
-    *pTimestamp = current_timestamp + ((new_item->timestamp - current_peer_timestamp) * USEC_PER_MSEC);
-    *pFrameSize = new_item->len;
-
-    k_free(new_item);
-
-    usb_data_item dummy = {0};
-    memcpy(dummy.preamble, PREAMBLE_BYTES, sizeof(PREAMBLE_BYTES));
-    dummy.id = 0;
-    dummy.type = USBF_PACKET_TYPE_ID_FRAME_MGMT;
-    dummy.subtype.fm_subtype = USBF_PACKET_SUBTYPE_ID_FRAME_MGMT_CTRL;
-    dummy.data.fm_ctrl.request_id = 0;
-    dummy.data.fm_ctrl.action = USBF_FM_ACTION_DUMMY;
-    add_data_to_usb(&dummy); // useless tx for some reason that's useful // TODO figure this out correctly
-
-    return ret;
+  return 0;
 }
 
 int videoCapturerReleaseStream(VideoCapturerHandle handle)
 {
-    LIVESTREAM_HANDLE_NULL_CHECK(handle);
-    LIVESTREAM_HANDLE_GET(handle);
+  LIVESTREAM_HANDLE_NULL_CHECK(handle);
+  LIVESTREAM_HANDLE_GET(handle);
+  LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
 
-    LIVESTREAM_HANDLE_STATUS_CHECK(imageHandle, VID_CAP_STATUS_STREAM_ON);
-    LOG_DBG("Releasing stream");
+  LOG_DBG("Releasing stream");
 
-    current_timestamp = 0;
+  /* Tell N6 to stop encoding before draining USB buffers */
+  usb_fm_send_ctrl(0, USBF_FM_ACTION_STOP);
 
-    // send stop sending command
-    usb_data_item cmd = {0};
-    memcpy(cmd.preamble, PREAMBLE_BYTES, sizeof(PREAMBLE_BYTES));
-    cmd.id = 0;
-    cmd.type = USBF_PACKET_TYPE_ID_FRAME_MGMT;
-    cmd.subtype.fm_subtype = USBF_PACKET_SUBTYPE_ID_FRAME_MGMT_CTRL;
-    cmd.data.fm_ctrl.request_id = 0;
-    cmd.data.fm_ctrl.action = USBF_FM_ACTION_STOP;
-    add_data_to_usb(&cmd);
-    usbf_shutdown_and_reset();
+  /* Reset timestamp anchors for the next stream session */
+  rw612_epoch_us = 0;
+  n6_origin_ms   = 0;
 
-    return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
+  /* Drain all USB buffers and reset parser state */
+  usbf_shutdown_and_reset();
+
+  return setStatus(handle, VID_CAP_STATUS_STREAM_OFF);
 }
 
 void videoCapturerDestory(VideoCapturerHandle handle)
 {
-    if (!handle) {
-        return;
-    }
+  if (!handle) {
+    return;
+  }
+  LIVESTREAM_HANDLE_GET(handle);
 
-    LIVESTREAM_HANDLE_GET(handle);
+  if (imageHandle->status == VID_CAP_STATUS_STREAM_ON) {
+    videoCapturerReleaseStream(handle);
+  }
 
-    if (imageHandle->status == VID_CAP_STATUS_STREAM_ON) {
-        videoCapturerReleaseStream(handle);
-    }
-
-    setStatus(handle, VID_CAP_STATUS_NOT_READY);
-
-    free(handle);
+  setStatus(handle, VID_CAP_STATUS_NOT_READY);
+  free(handle);
 }
