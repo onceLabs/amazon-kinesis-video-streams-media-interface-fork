@@ -180,8 +180,6 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
    * videoCapturerReleaseStream. Just send START and force a keyframe. */
   usb_fm_send_ctrl(0, USBF_FM_ACTION_START);
   k_sleep(K_MSEC(10));
-  usb_fm_send_ctrl(0, USBF_FM_ACTION_IFRAME);
-  k_sleep(K_MSEC(40));
 
   /* Give the N6 time to start the encoder before we expect frames.
    * 40 ms covers one frame interval at 25 fps. */
