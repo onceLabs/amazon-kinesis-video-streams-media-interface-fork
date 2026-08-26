@@ -36,7 +36,6 @@
 
 #include <errno.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "UVCCommon.h"
@@ -88,6 +87,13 @@ typedef struct {
     uint32_t origin_ms;
 } UVCVideoCapturer;
 
+/* CONFIG_USBH_VIDEO_INSTANCES_COUNT=1 - only one UVC device is ever
+ * attached, so a static singleton is correct here (not just an
+ * allocator-style preference): there is no scenario with more than one
+ * live instance to size a pool for. */
+static UVCVideoCapturer uvc_capturer_instance;
+static bool uvc_capturer_in_use;
+
 static int setStatus(VideoCapturerHandle handle, const VideoCapturerStatus newStatus)
 {
     UVC_HANDLE_NULL_CHECK(handle);
@@ -130,13 +136,14 @@ static void releaseVideoBuffers(UVCVideoCapturer *imageHandle)
 
 VideoCapturerHandle videoCapturerCreate(void)
 {
-    UVCVideoCapturer *imageHandle = malloc(sizeof(UVCVideoCapturer));
-    if (imageHandle == NULL) {
-        LOG_ERR("OOM allocating capturer handle");
+    if (uvc_capturer_in_use) {
+        LOG_ERR("UVCVideoCapturer supports only a single instance");
         return NULL;
     }
 
+    UVCVideoCapturer *imageHandle = &uvc_capturer_instance;
     memset(imageHandle, 0, sizeof(*imageHandle));
+    uvc_capturer_in_use = true;
 
     imageHandle->capability.formats = (1 << (VID_FMT_H264 - 1));
     imageHandle->capability.resolutions = (1 << (VID_RES_480P - 1)) | (1 << (VID_RES_720P - 1));
@@ -378,5 +385,5 @@ void videoCapturerDestory(VideoCapturerHandle handle)
     }
 
     setStatus(handle, VID_CAP_STATUS_NOT_READY);
-    free(handle);
+    uvc_capturer_in_use = false;
 }
