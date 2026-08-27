@@ -40,7 +40,7 @@
 
 #include "UVCCommon.h"
 #include "UVCPort.h"
-#include "com/amazonaws/kinesis/video/capturer/VideoCapturer.h"
+#include "com/amazonaws/kinesis/video/capturer/VideoCapturerUVC.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/video.h>
@@ -209,6 +209,24 @@ int videoCapturerGetFormat(const VideoCapturerHandle handle, VideoFormat *pForma
     return 0;
 }
 
+/* videoCapturerAcquireStream() has several failure points after
+ * usbh_init()/usbh_enable() succeed. On any of them, the caller
+ * (video_thread in kvs_cli.c) just logs and retries the next stream
+ * attempt without ever calling videoCapturerReleaseStream() - and the
+ * next videoCapturerCreate() memsets usbh_started back to false, losing
+ * the only record that the controller is still actually initialized.
+ * Every later usbh_init() then permanently fails with -EALREADY. Call
+ * this on every acquire failure path once usbh_started is true, so the
+ * function leaves the controller exactly as it found it on any error. */
+static void teardown_usbh(UVCVideoCapturer *imageHandle)
+{
+    if (imageHandle->usbh_started) {
+        usbh_disable(&uvc_uhs_ctx);
+        usbh_shutdown(&uvc_uhs_ctx);
+        imageHandle->usbh_started = false;
+    }
+}
+
 int videoCapturerAcquireStream(VideoCapturerHandle handle)
 {
     UVC_HANDLE_NULL_CHECK(handle);
@@ -247,6 +265,7 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     while (video_get_format(imageHandle->dev, &fmt) != 0) {
         if (waited_ms >= UVC_CONNECT_TIMEOUT_MS) {
             LOG_ERR("Timed out waiting for N6 UVC device");
+            teardown_usbh(imageHandle);
             return -ENODEV;
         }
         k_sleep(K_MSEC(UVC_CONNECT_POLL_INTERVAL_MS));
@@ -260,6 +279,7 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     ret = video_set_format(imageHandle->dev, &fmt);
     if (ret != 0) {
         LOG_ERR("video_set_format failed: %d", ret);
+        teardown_usbh(imageHandle);
         return ret;
     }
 
@@ -267,11 +287,13 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     ret = video_get_caps(imageHandle->dev, &caps);
     if (ret != 0) {
         LOG_ERR("video_get_caps failed: %d", ret);
+        teardown_usbh(imageHandle);
         return ret;
     }
     if (caps.min_vbuf_count > CONFIG_VIDEO_BUFFER_POOL_NUM_MAX) {
         LOG_ERR("Device requires %u buffers, pool only holds %u", caps.min_vbuf_count,
                 CONFIG_VIDEO_BUFFER_POOL_NUM_MAX);
+        teardown_usbh(imageHandle);
         return -ENOMEM;
     }
 
@@ -283,6 +305,7 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
             LOG_ERR("Unable to alloc video buffer %u/%u", imageHandle->vbuf_count,
                     CONFIG_VIDEO_BUFFER_POOL_NUM_MAX);
             releaseVideoBuffers(imageHandle);
+            teardown_usbh(imageHandle);
             return -ENOMEM;
         }
         vbuf->type = caps.type;
@@ -297,6 +320,7 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     if (ret != 0) {
         LOG_ERR("video_stream_start failed: %d", ret);
         releaseVideoBuffers(imageHandle);
+        teardown_usbh(imageHandle);
         return ret;
     }
 
@@ -307,7 +331,7 @@ int videoCapturerAcquireStream(VideoCapturerHandle handle)
     return setStatus(handle, VID_CAP_STATUS_STREAM_ON);
 }
 
-int videoCapturerGetFrame(VideoCapturerHandle handle, void *pFrameDataBuffer, const size_t frameDataBufferSize,
+int videoCapturerGetFrame(VideoCapturerHandle handle, void **pFrameDataBuffer, const size_t frameDataBufferSize,
                            uint64_t *pTimestamp, size_t *pFrameSize)
 {
     UVC_HANDLE_NULL_CHECK(handle);
@@ -328,18 +352,57 @@ int videoCapturerGetFrame(VideoCapturerHandle handle, void *pFrameDataBuffer, co
         return ret;
     }
 
-    if (vbuf->bytesused > frameDataBufferSize) {
-        LOG_ERR("Frame %u B exceeds caller buffer %zu B - dropping", vbuf->bytesused, frameDataBufferSize);
+    if (vbuf->bytesused == 0) {
+        /* usbh_uvc_enqueue() resets a buffer's bytesused/timestamp to 0
+         * before handing it back to the driver to be refilled - dequeuing
+         * one still in that reset state (never actually captured into)
+         * means there's no real frame here yet, not a valid zero-length
+         * one. Treating it as valid produced a frame with timestamp 0,
+         * which then underflowed the unsigned
+         * (vbuf->timestamp - imageHandle->origin_ms) subtraction below into
+         * a huge bogus value, and a 0-byte frame that KvsApp_addFrame()
+         * correctly rejects - but by then the caller had already treated
+         * that as a fatal error and torn down the whole stream. Requeue and
+         * tell the caller to just try again. */
         video_enqueue(imageHandle->dev, vbuf);
-        return -ENOSPC;
+        return -EAGAIN;
     }
 
     if (imageHandle->rw612_epoch_us == 0) {
         imageHandle->rw612_epoch_us = getEpochTimestampInUs();
         imageHandle->origin_ms = vbuf->timestamp;
+    } else if (vbuf->timestamp < imageHandle->origin_ms) {
+        /* (vbuf->timestamp - origin_ms) below is unsigned - a real frame
+         * should never capture before the stream's own origin point, but
+         * if one ever does (buffer pool ping-pong racing the timestamp
+         * stamp in uvc_finalize_frame(), etc), this subtraction would
+         * silently wrap to a huge bogus value instead of erroring, handing
+         * KVS a frame timestamped years in the future. Treat it the same
+         * as a not-yet-captured buffer: requeue and let the caller retry
+         * rather than corrupt the stream with a garbage timestamp. */
+        LOG_ERR("Frame timestamp %u ms before stream origin %u ms - dropping",
+                vbuf->timestamp, imageHandle->origin_ms);
+        video_enqueue(imageHandle->dev, vbuf);
+        return -EAGAIN;
     }
 
-    memcpy(pFrameDataBuffer, vbuf->buffer, vbuf->bytesused);
+    /* Sized to the frame actually captured (+ caller's requested headroom),
+     * not a worst-case ceiling - a fresh k_malloc() every frame, always
+     * requesting the same ~41KB ceiling regardless of real content, was
+     * contending with KVS's own long-lived stream buffer on the same small
+     * general heap and throttling capture to ~1fps via the caller's
+     * malloc-failure retry sleep. Freed later by KVS's own
+     * defaultOnDataFrameTerminate() once KvsApp_addFrame() is done with it -
+     * this function's caller must not free it directly. */
+    uint8_t *pData = k_malloc(vbuf->bytesused + frameDataBufferSize);
+    if (pData == NULL) {
+        LOG_ERR("Failed to malloc %u B frame buffer", vbuf->bytesused + frameDataBufferSize);
+        video_enqueue(imageHandle->dev, vbuf);
+        return -ENOMEM;
+    }
+
+    memcpy(pData, vbuf->buffer, vbuf->bytesused);
+    *pFrameDataBuffer = pData;
     *pFrameSize = vbuf->bytesused;
     *pTimestamp = imageHandle->rw612_epoch_us +
                   ((uint64_t)(vbuf->timestamp - imageHandle->origin_ms) * USEC_PER_MSEC);
@@ -366,6 +429,7 @@ int videoCapturerReleaseStream(VideoCapturerHandle handle)
     }
 
     releaseVideoBuffers(imageHandle);
+    teardown_usbh(imageHandle);
 
     imageHandle->rw612_epoch_us = 0;
     imageHandle->origin_ms = 0;
